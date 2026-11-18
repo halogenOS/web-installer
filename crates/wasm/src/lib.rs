@@ -22,6 +22,8 @@ mod package;
 mod package_failure;
 mod page;
 mod page_failure;
+mod phone_check_failure;
+mod phone_check_report;
 mod picked_files;
 mod picked_release_files;
 mod progress;

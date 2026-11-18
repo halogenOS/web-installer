@@ -62,7 +62,6 @@ export interface UsbEndpoint {
   readonly endpointNumber: number;
   readonly direction: UsbDirection;
   readonly type: UsbTransferType;
-  readonly packetSize: number;
 }
 
 export interface UsbAlternate {
@@ -411,10 +410,16 @@ export class PhoneLink implements PageLink {
     }
   }
 
+  // No zero-length packet ends a send: a download body goes out in packet-aligned pieces, and
+  // fastbootd ends its read of the body at the first short packet.
   async send(bytes: Uint8Array): Promise<void> {
-    await this.#transferOut(bytes);
-    if (bytes.length > 0 && bytes.length % this.#fastboot.output.packetSize === 0) {
-      await this.#transferOut(new Uint8Array(0));
+    const { status, bytesWritten } = await this.#device.transferOut(
+      this.#fastboot.output.endpointNumber,
+      bytes,
+    );
+    requireOk(status, "send");
+    if (bytesWritten !== bytes.length) {
+      throw new TransferRefused(`The phone received ${bytesWritten} of ${bytes.length} bytes.`);
     }
   }
 
@@ -443,17 +448,6 @@ export class PhoneLink implements PageLink {
 
   #closeDevice(options?: ErrorOptions): Promise<void> {
     return releasing(() => this.#device.close(), options);
-  }
-
-  async #transferOut(bytes: Uint8Array): Promise<void> {
-    const { status, bytesWritten } = await this.#device.transferOut(
-      this.#fastboot.output.endpointNumber,
-      bytes,
-    );
-    requireOk(status, "send");
-    if (bytesWritten !== bytes.length) {
-      throw new TransferRefused(`The phone received ${bytesWritten} of ${bytes.length} bytes.`);
-    }
   }
 }
 

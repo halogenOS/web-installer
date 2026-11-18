@@ -5,8 +5,7 @@ use std::error::Error;
 use std::fmt;
 
 use failure_text::cause_sentence;
-use fastboot::{FastbootError, UnmetRequirement};
-use release::ReleaseName;
+use fastboot::FastbootError;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -14,6 +13,7 @@ use crate::host::HostFailure;
 use crate::host_link::LinkFailure;
 use crate::page::{OpenFailure, PhoneProblem};
 use crate::page_failure::{REPORT_DEFECT, page_failure};
+use crate::phone_check_failure::{PHONE_CANNOT_TAKE_RELEASE, PhoneUnfit, RESTART_INTO_FASTBOOT};
 use crate::release_files_failure::{FREE_STORAGE, ReleaseFilesError};
 
 const PHONE_UNCHANGED: &str = "Nothing was written to your phone";
@@ -23,12 +23,7 @@ pub(crate) enum InstallError {
     Page(HostFailure),
     PhoneUnavailable(PhoneProblem),
     Phone(FastbootError<LinkFailure>),
-    OtherProduct {
-        device: ReleaseName,
-        product: String,
-    },
-    RequirementsUnmet(Vec<UnmetRequirement>),
-    BootloaderLocked,
+    PhoneUnfit(PhoneUnfit),
     Files(ReleaseFilesError),
     FilesKept(HostFailure),
 }
@@ -60,22 +55,14 @@ impl InstallError {
             | Self::Phone(FastbootError::Link(LinkFailure::Unavailable(problem))) => {
                 problem.next_step()
             }
-            Self::Phone(FastbootError::Link(LinkFailure::Contract(_))) => REPORT_DEFECT,
+            Self::Phone(
+                FastbootError::Link(LinkFailure::Contract(_)) | FastbootError::SparseImage { .. },
+            ) => REPORT_DEFECT,
+            Self::Phone(FastbootError::PartitionUnfit(_)) => PHONE_CANNOT_TAKE_RELEASE,
             Self::Phone(_) => {
                 "Your phone is in fastboot mode. Keep it plugged in, then run the install again."
             }
-            Self::OtherProduct { .. } => {
-                "Choose the release of the connected phone, or connect the phone that you chose \
-                 the release for, then run the install again."
-            }
-            Self::RequirementsUnmet(_) => {
-                "Update the firmware of the phone to a version that the release lists, then run \
-                 the install again."
-            }
-            Self::BootloaderLocked => {
-                "Unlock the bootloader with `fastboot flashing unlock` on a computer, then run the \
-                 install again. Unlocking erases all data on the phone."
-            }
+            Self::PhoneUnfit(unfit) => unfit.next_step(),
             Self::Files(failure) => failure.next_step(),
             Self::FilesKept(_) => {
                 "The next install deletes them. To delete them now, clear the data of this site \
@@ -96,9 +83,7 @@ impl PhoneProblem {
                 "Let the browser use the phone: on Linux, add a udev rule for it, on Windows, \
                  install the WinUSB driver for it. Then run the install again."
             }
-            Self::NoFastbootInterface => {
-                "Restart the phone into fastboot mode, then run the install again."
-            }
+            Self::NoFastbootInterface => RESTART_INTO_FASTBOOT,
             Self::InterfaceBusy => {
                 "Close every other program and tab that uses the phone, such as fastboot or adb, \
                  then run the install again."
@@ -117,30 +102,7 @@ impl fmt::Display for InstallError {
                 "The phone cannot be used after its restart into fastbootd: {problem}"
             ),
             Self::Phone(source) => write!(f, "The install stopped, because {source}"),
-            Self::OtherProduct { device, product } => write!(
-                f,
-                "The connected phone reports the product {product}, and the release for {device} \
-                 does not install on that product. {PHONE_UNCHANGED}"
-            ),
-            Self::RequirementsUnmet(unmet) => {
-                f.write_str("The phone does not meet the requirements of the release:")?;
-                for requirement in unmet {
-                    write!(
-                        f,
-                        " {} must be one of {}, and the phone reports {}.",
-                        requirement.variable.getvar_name(),
-                        requirement.values.join(", "),
-                        requirement.reported.as_deref().unwrap_or("nothing")
-                    )?;
-                }
-                write!(f, " {PHONE_UNCHANGED}")
-            }
-            Self::BootloaderLocked => {
-                write!(
-                    f,
-                    "The bootloader of the phone is locked. {PHONE_UNCHANGED}"
-                )
-            }
+            Self::PhoneUnfit(unfit) => write!(f, "{unfit} {PHONE_UNCHANGED}"),
             Self::Files(failure) => write!(f, "{} {PHONE_UNCHANGED}", cause_sentence(failure)),
             Self::FilesKept(failure) => write!(
                 f,
@@ -157,10 +119,7 @@ impl Error for InstallError {
             Self::Page(source) | Self::FilesKept(source) => Some(source),
             Self::Phone(source) => Some(source),
             Self::Files(source) => Some(source),
-            Self::PhoneUnavailable(_)
-            | Self::OtherProduct { .. }
-            | Self::RequirementsUnmet(_)
-            | Self::BootloaderLocked => None,
+            Self::PhoneUnavailable(_) | Self::PhoneUnfit(_) => None,
         }
     }
 }

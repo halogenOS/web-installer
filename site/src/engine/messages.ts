@@ -1,7 +1,16 @@
 // SPDX-FileCopyrightText: The halogenOS Project
 // SPDX-License-Identifier: GPL-3.0-only
 import { isPhoneId, type PhoneId } from "../device/usb.ts";
-import { AskedFiles, BlockEdge, Stage, type InstallFailure, type Progress } from "../wasm/contract.ts";
+import {
+  AskedFiles,
+  BlockEdge,
+  CheckVerdict,
+  PhoneAnswer,
+  PhoneCheckKind,
+  Stage,
+  type InstallFailure,
+  type Progress,
+} from "../wasm/contract.ts";
 import { isInstallFailure } from "./install_failure.ts";
 
 export const PageMessageKind = {
@@ -94,10 +103,44 @@ function hasPlan(value: Record<string, unknown>): boolean {
 }
 
 const ASKED_FILES: readonly unknown[] = Object.values(AskedFiles);
+const CHECK_VERDICTS: readonly unknown[] = Object.values(CheckVerdict);
+const PHONE_CHECK_KINDS: readonly unknown[] = Object.values(PhoneCheckKind);
+const PHONE_ANSWERS: readonly unknown[] = Object.values(PhoneAnswer);
+
+function isPhoneCheckKind(value: unknown): value is PhoneCheckKind {
+  return PHONE_CHECK_KINDS.includes(value);
+}
+
+function isOptionalText(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+function isOptionalAnswer(value: unknown): boolean {
+  return value === undefined || PHONE_ANSWERS.includes(value);
+}
+
+function isOptionalPartitionFit(value: unknown): boolean {
+  return value === undefined || (isRecord(value) && hasNumbers(value, "fitting", "count"));
+}
+
+const PHONE_READING_FIELDS: Record<PhoneCheckKind, (reading: Record<string, unknown>) => boolean> = {
+  [PhoneCheckKind.Model]: (reading) => isOptionalText(reading.product),
+  [PhoneCheckKind.Bootloader]: (reading) => isOptionalAnswer(reading.unlocked),
+  [PhoneCheckKind.Battery]: (reading) => isOptionalAnswer(reading.socOk),
+  [PhoneCheckKind.Slot]: (reading) => isOptionalText(reading.currentSlot),
+  [PhoneCheckKind.Partitions]: (reading) => isOptionalPartitionFit(reading.fit),
+  [PhoneCheckKind.TransferSize]: (reading) =>
+    reading.downloadLimit === undefined || typeof reading.downloadLimit === "number",
+};
+
+function isPhoneReading(value: unknown): boolean {
+  return isRecord(value) && isPhoneCheckKind(value.check) && PHONE_READING_FIELDS[value.check](value);
+}
 
 const PROGRESS_FIELDS: Record<Stage, (value: Record<string, unknown>) => boolean> = {
   [Stage.Connecting]: () => true,
   [Stage.Checking]: hasPlan,
+  [Stage.PhoneChecked]: (value) => CHECK_VERDICTS.includes(value.verdict) && isPhoneReading(value.reading),
   [Stage.ChoosingFiles]: (value) =>
     ASKED_FILES.includes(value.asked) &&
     isRecordList(

@@ -61,6 +61,7 @@ export const STEP_LABEL: Record<InstallStep, string> = {
 export const STEP_OF_STAGE: Record<Stage, InstallStep> = {
   [Stage.Connecting]: InstallStep.Phone,
   [Stage.Checking]: InstallStep.Phone,
+  [Stage.PhoneChecked]: InstallStep.Phone,
   [Stage.ChoosingFiles]: InstallStep.Build,
   [Stage.CheckingPickedFiles]: InstallStep.Build,
   [Stage.FetchingStockFirmware]: InstallStep.Build,

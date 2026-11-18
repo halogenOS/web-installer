@@ -72,6 +72,11 @@ impl PageLink {
 impl Link for PageLink {
     type Error = LinkFailure;
 
+    // The bulk write size of the AOSP fastboot host on Linux, the smallest of its hosts
+    // (Windows and macOS write 1 MiB): MAX_USBFS_BULK_WRITE_SIZE in
+    // system/core/fastboot/usb_linux.cpp of android-17.0.0_r1, checked 2026-11-18.
+    const SEND_LIMIT: usize = 256 * 1024;
+
     async fn send(&mut self, bytes: &[u8]) -> Result<(), LinkFailure> {
         let _result = self
             .call(&self.send_function, &Uint8Array::from(bytes))

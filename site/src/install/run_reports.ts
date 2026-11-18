@@ -7,8 +7,10 @@ import {
   type Progress,
   type AskedFiles,
   type AwaitedFile,
+  type PhoneCheck,
   type Step,
 } from "../wasm/contract.ts";
+import { InstallStep, STEP_OF_STAGE } from "./install_steps.ts";
 
 export interface Amount {
   done: number;
@@ -57,6 +59,7 @@ export interface StepReport {
 export interface RunReports {
   stage: Stage;
   plan: InstallPlan | undefined;
+  phoneChecks: PhoneCheck[];
   fileWait: FileWait | undefined;
   pickedFilesChecked: Amount | undefined;
   stockFirmware: StockFirmwareReport | undefined;
@@ -73,6 +76,7 @@ export function emptyReports(stage: Stage): RunReports {
   return {
     stage,
     plan: undefined,
+    phoneChecks: [],
     fileWait: undefined,
     pickedFilesChecked: undefined,
     stockFirmware: undefined,
@@ -84,6 +88,10 @@ export function emptyReports(stage: Stage): RunReports {
     failedAttempts: undefined,
     phoneMessages: [],
   };
+}
+
+export function phoneChecksOfStop(reports: RunReports): readonly PhoneCheck[] {
+  return STEP_OF_STAGE[reports.stage] === InstallStep.Phone ? reports.phoneChecks : [];
 }
 
 export function recordProgress(reports: RunReports, progress: Progress): void {
@@ -101,6 +109,9 @@ export function recordProgress(reports: RunReports, progress: Progress): void {
       reports.plan = { device, build, shipped, built, sources, stockFiles, install };
       break;
     }
+    case Stage.PhoneChecked:
+      reports.phoneChecks.push({ verdict: progress.verdict, reading: progress.reading });
+      break;
     case Stage.ChoosingFiles:
       reports.fileWait = {
         asked: progress.asked,

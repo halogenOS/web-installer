@@ -57,6 +57,7 @@ export function useInstallFlow() {
   const usbProblem = shallowRef<InstallFailure | undefined>();
   const zipProblem = shallowRef<InstallFailure | undefined>();
   const cancelled = ref(false);
+  const riskAccepted = ref(false);
   const reports = reactive<RunReports>(emptyReports(METHODS[InstallMethod.Zip].firstStage));
   const failure = shallowRef<InstallFailure | undefined>();
   let session: InstallSession | undefined;
@@ -192,7 +193,7 @@ export function useInstallFlow() {
 
   async function connect(): Promise<void> {
     const release = chosen.value;
-    if (release === undefined) return;
+    if (release === undefined || !riskAccepted.value) return;
     const phone = await choosePhone();
     if (phone === undefined) return;
     begin(InstallMethod.Flash, () =>
@@ -208,6 +209,7 @@ export function useInstallFlow() {
 
   function goToRelease(): void {
     method.value = InstallMethod.Zip;
+    riskAccepted.value = false;
     phase.value = Phase.Choosing;
   }
 
@@ -246,6 +248,7 @@ export function useInstallFlow() {
     usbProblem,
     zipProblem,
     cancelled,
+    riskAccepted,
     reports,
     failure,
     writesToPhone,

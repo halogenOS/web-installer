@@ -5,6 +5,7 @@ use release::{GitRepository, Image, PartitionName, Release, Source, Step, StockP
 use serde::Serialize;
 
 use crate::page_failure::PageFailure;
+use crate::phone_check_report::PhoneCheckReport;
 use crate::picked_files::{AskedFile, AskedFiles};
 use crate::release_images::ImagesFor;
 
@@ -17,6 +18,7 @@ use crate::release_images::ImagesFor;
 pub(crate) enum Progress<'a> {
     Connecting,
     Checking(ReleasePlan<'a>),
+    PhoneChecked(PhoneCheckReport<'a>),
     ReadingRelease,
     ReleaseRead(ReleasePlan<'a>),
     ChoosingFiles {

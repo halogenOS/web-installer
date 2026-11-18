@@ -13,6 +13,8 @@ use crate::host_link::{LinkFailure, PageLink};
 use crate::host_source::HostSource;
 use crate::install_failure::InstallError;
 use crate::page::{InstallPage, OpenFailure, Page};
+use crate::phone_check_failure::PhoneUnfit;
+use crate::phone_check_report::PhoneCheckReport;
 use crate::progress::{Progress, ReleasePlan};
 use crate::release_images::{ImagesFor, StoredName, store_checked_images};
 use crate::releases::read_release_of_tag;
@@ -31,28 +33,24 @@ async fn run(page: &Page, release_tag: &str) -> Result<(), InstallError> {
         page.open_phone().await?,
         Box::new(move |text| messages.show_phone_message(text)),
     );
-    let product = fastboot.getvar("product").await?;
     let (published, release) = read_release_of_tag(page.site(), release_tag).await?;
-    if !release.parts().accepts_product(&product) {
-        return Err(InstallError::OtherProduct {
-            device: release.parts().device.clone(),
-            product,
-        });
-    }
     page.report(&Progress::Checking(ReleasePlan::of(
         &release,
         ImagesFor::Install,
     )));
-    let phone = check_phone(&mut fastboot, &release).await?;
-    if !phone.unmet.is_empty() {
-        return Err(InstallError::RequirementsUnmet(phone.unmet));
-    }
-    if !phone.unlocked {
-        return Err(InstallError::BootloaderLocked);
-    }
+    let phone = check_phone(&mut fastboot, &release, &mut |check| {
+        page.report(&Progress::PhoneChecked(PhoneCheckReport::of(check)));
+    })
+    .await?
+    .map_err(|failure| {
+        InstallError::PhoneUnfit(PhoneUnfit {
+            device: release.parts().device.clone(),
+            failure,
+        })
+    })?;
     store_checked_images(page, &release, &published, ImagesFor::Install, None).await?;
     let mut host = StoredImages { page: page.clone() };
-    fastboot::install(&release, fastboot, &mut host).await?;
+    fastboot::install(&release, &phone, fastboot, &mut host).await?;
     page.remove_all_files()
         .await
         .map_err(InstallError::FilesKept)?;

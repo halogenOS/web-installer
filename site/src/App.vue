@@ -5,8 +5,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, watch } from "vue";
 import logoUrl from "../../website/public/logo.png";
 import { Phase, useInstallFlow } from "./install/install_flow.ts";
 import { InstallStep } from "./install/install_steps.ts";
+import { phoneChecksOfStop } from "./install/run_reports.ts";
 import { describeStep } from "./install/step_text.ts";
 import BuildImages from "./screens/BuildImages.vue";
+import CheckPhone from "./screens/CheckPhone.vue";
 import ChooseRelease from "./screens/ChooseRelease.vue";
 import ConnectPhone from "./screens/ConnectPhone.vue";
 import InstallDone from "./screens/InstallDone.vue";
@@ -26,7 +28,11 @@ import { Stage } from "./wasm/contract.ts";
 const flow = useInstallFlow();
 const { phase, step, reports } = flow;
 
-const screenKey = computed(() => `${phase.value}:${step.value}`);
+const checkingPhone = computed(
+  () => phase.value === Phase.Running && step.value === InstallStep.Phone && reports.plan !== undefined,
+);
+
+const screenKey = computed(() => `${phase.value}:${step.value}:${checkingPhone.value}`);
 
 watch(screenKey, async () => {
   await nextTick();
@@ -133,14 +139,22 @@ onBeforeUnmount(flow.endSession);
           :failure="flow.failure.value"
           :build="reports.plan?.build"
           :phone-messages="reports.phoneMessages"
+          :phone-checks="phoneChecksOfStop(reports)"
           :title="flow.run.value.stoppedTitle"
           :again-label="flow.run.value.againLabel"
           @again="flow.startAgain"
         />
+        <CheckPhone
+          v-else-if="checkingPhone && reports.plan !== undefined"
+          :build="reports.plan.build"
+          :checks="reports.phoneChecks"
+          @cancel="flow.cancel"
+        />
         <ConnectPhone
           v-else-if="step === InstallStep.Phone && flow.chosen.value !== undefined"
+          v-model:risk-accepted="flow.riskAccepted.value"
           :release="flow.chosen.value"
-          :stage="phase === Phase.Running ? reports.stage : undefined"
+          :connecting="phase === Phase.Running"
           :cancelled="flow.cancelled.value"
           :usb-problem="flow.usbProblem.value"
           @connect="flow.connect"

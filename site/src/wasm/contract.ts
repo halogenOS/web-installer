@@ -206,6 +206,7 @@ export interface Source {
 export const Stage = {
   Connecting: "connecting",
   Checking: "checking",
+  PhoneChecked: "phone_checked",
   ChoosingFiles: "choosing_files",
   CheckingPickedFiles: "checking_picked_files",
   FetchingStockFirmware: "fetching_stock_firmware",
@@ -247,9 +248,39 @@ export interface InstallPlan {
   install: Step[];
 }
 
+export const CheckVerdict = { Passed: "passed", Failed: "failed" } as const;
+export type CheckVerdict = (typeof CheckVerdict)[keyof typeof CheckVerdict];
+
+export const PhoneCheckKind = {
+  Model: "model",
+  Bootloader: "bootloader",
+  Battery: "battery",
+  Slot: "slot",
+  Partitions: "partitions",
+  TransferSize: "transfer_size",
+} as const;
+export type PhoneCheckKind = (typeof PhoneCheckKind)[keyof typeof PhoneCheckKind];
+
+export const PhoneAnswer = { Yes: "yes", No: "no" } as const;
+export type PhoneAnswer = (typeof PhoneAnswer)[keyof typeof PhoneAnswer];
+
+export type PhoneReading =
+  | { check: typeof PhoneCheckKind.Model; product: string | undefined }
+  | { check: typeof PhoneCheckKind.Bootloader; unlocked: PhoneAnswer | undefined }
+  | { check: typeof PhoneCheckKind.Battery; socOk: PhoneAnswer | undefined }
+  | { check: typeof PhoneCheckKind.Slot; currentSlot: string | undefined }
+  | { check: typeof PhoneCheckKind.Partitions; fit: { fitting: number; count: number } | undefined }
+  | { check: typeof PhoneCheckKind.TransferSize; downloadLimit: number | undefined };
+
+export interface PhoneCheck {
+  verdict: CheckVerdict;
+  reading: PhoneReading;
+}
+
 export type Progress =
   | { stage: typeof Stage.Connecting }
   | ({ stage: typeof Stage.Checking } & InstallPlan)
+  | ({ stage: typeof Stage.PhoneChecked } & PhoneCheck)
   | {
       stage: typeof Stage.ChoosingFiles;
       asked: AskedFiles;

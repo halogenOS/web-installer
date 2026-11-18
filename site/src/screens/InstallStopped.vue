@@ -7,15 +7,17 @@ import FailureNotice from "../ui/FailureNotice.vue";
 import { BUTTON_CLASS, ButtonLook } from "../ui/button_look.ts";
 import { Outcome } from "../ui/outcome.ts";
 import OutcomeMark from "../ui/OutcomeMark.vue";
+import PhoneCheckList from "../ui/PhoneCheckList.vue";
 import PhoneMessages from "../ui/PhoneMessages.vue";
 import ScreenFrame from "../ui/ScreenFrame.vue";
-import type { InstallFailure } from "../wasm/contract.ts";
+import type { InstallFailure, PhoneCheck } from "../wasm/contract.ts";
 import { COPY_BUTTON, copyReport, CopyState } from "./copy_report.ts";
 
 const props = defineProps<{
   failure: InstallFailure;
   build: string | undefined;
   phoneMessages: readonly string[];
+  phoneChecks: readonly PhoneCheck[];
   title: string;
   againLabel: string;
 }>();
@@ -35,6 +37,7 @@ async function copyFailure(): Promise<void> {
     </template>
 
     <FailureNotice :failure="failure" />
+    <PhoneCheckList v-if="phoneChecks.length > 0" :checks="phoneChecks" />
     <PhoneMessages :messages="phoneMessages" />
 
     <template #actions>
