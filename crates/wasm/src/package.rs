@@ -101,7 +101,10 @@ async fn write_operation_data(
         let Some((listed, compression)) = compressions.pop_front() else {
             return Ok(());
         };
-        let data = compression.data().await.map_err(PackageFailure::Page)?;
+        let data = compression
+            .data()
+            .await
+            .map_err(PackageFailure::Compression)?;
         ota_package
             .take_data(listed, &data)
             .map_err(package_failure)?;

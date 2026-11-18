@@ -1,17 +1,17 @@
 // SPDX-FileCopyrightText: The halogenOS Project
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display, Formatter};
 use std::io::Write;
 use std::rc::Rc;
 
-use byte_io::{Body, ByteSource, SliceSource, SourceBody};
+use byte_io::{Body, ByteSource, READ_PIECE_LEN, Scratch, SliceSource, SourceBody};
 use image_build::{FileToFill, ImageBuildError, build_image};
 use release::{
     BuiltImage, BuiltImageFiles, BuiltImageStores, FileStore, Image, Origin, Package,
-    PartitionName, Release, ReleaseFile, Step, StoredFile, WrittenImage, lfs_pointer,
-    payload_images,
+    PartitionName, Release, ReleaseFile, SourceIndex, SourceUse, Step, StoredFile, WrittenImage,
+    lfs_pointer, payload_images,
 };
 use sha256::Sha256Digest;
 
@@ -20,6 +20,8 @@ use crate::file_digest::FileDigest;
 use crate::host::HostFailure;
 use crate::host_sink::HostSink;
 use crate::host_source::HostSource;
+use crate::image_archive_files::{PartToRead, unpack_image};
+use crate::kept_images::keep_stored_images;
 use crate::page::{Download, Storage, Transfer};
 use crate::picked_release_files::{
     PickedReleaseFiles, pick_release_files_the_page_cannot_download,
@@ -36,8 +38,14 @@ pub(crate) enum StoredName<'a> {
     OwnStore(&'a PartitionName),
     SharedStore,
     SuperEmpty,
-    StockPart(usize),
-    StockImage(&'a PartitionName),
+    StockPart {
+        source: SourceIndex,
+        part: usize,
+    },
+    StockImage {
+        source: SourceIndex,
+        partition: &'a PartitionName,
+    },
 }
 
 impl Display for StoredName<'_> {
@@ -47,12 +55,15 @@ impl Display for StoredName<'_> {
             Self::OwnStore(partition) => write!(f, "{partition}.store"),
             Self::SharedStore => f.write_str("shared-files.store"),
             Self::SuperEmpty => f.write_str("super_empty.img"),
-            Self::StockPart(index) => write!(f, "stock-part-{index}.7z"),
-            Self::StockImage(partition) => write!(f, "stock-{partition}.img"),
+            Self::StockPart { source, part } => write!(f, "stock-{}-part-{part}.7z", source.0),
+            Self::StockImage { source, partition } => {
+                write!(f, "stock-{}-{partition}.img", source.0)
+            }
         }
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct Destination<'a> {
     pub(crate) name: StoredName<'a>,
     pub(crate) offset: u64,
@@ -128,27 +139,44 @@ pub(crate) async fn store_checked_images(
     stored_package: Option<&Package>,
 ) -> Result<(), ReleaseFilesError> {
     let images = run.images(release);
+    let super_layouts = run.super_layouts(release, published)?;
+    let destinations: Vec<Destination<'_>> = images
+        .iter()
+        .map(|&(partition, image)| image_destination(partition, image))
+        .chain(super_layouts.iter().map(|layout| layout.to))
+        .collect();
+    let kept = keep_stored_images(storage, &destinations).await?;
+    let (kept_images, images_to_store): (Vec<_>, Vec<_>) = images
+        .iter()
+        .copied()
+        .partition(|&(partition, _)| kept.has(StoredName::Image(partition)));
     let stores = BuiltImageStores::of(
-        images
+        images_to_store
             .iter()
             .filter_map(|&(partition, image)| Some((partition, image.built()?))),
     );
-    let super_layouts = run.super_layouts(release, published)?;
-    let needed = storage_needed(&images, &super_layouts, &stores, stored_package);
-    let free = storage.free_storage().await?;
-    if free < needed {
+    let room = storage.free_storage().await? + kept.bytes;
+    let built = built_image_fetches(release, published, &stores)?;
+    let firmwares = open_stock_firmwares(storage, release, &images_to_store).await?;
+    let needed = storage_needed(
+        &images,
+        &super_layouts,
+        &stores,
+        &firmware_storage(&firmwares, &built)?,
+        stored_package,
+    );
+    if room < needed {
         return Err(ReleaseFilesError::StorageShort(StorageShortage {
             needed,
-            free,
+            free: room,
             package_counted: stored_package.is_some(),
         }));
     }
-    let mut stock_firmware = match &release.parts().stock_firmware {
-        Some(firmware) => Some(open_stock_firmware(storage, firmware).await?),
-        None => None,
-    };
-    let whole = whole_image_fetches(release, &images, super_layouts, published)?;
-    let built = built_image_fetches(release, published, &stores)?;
+    let mut firmwares = store_firmware_parts(storage, firmwares).await?;
+    let (kept_whole, whole): (Vec<_>, Vec<_>) =
+        whole_image_fetches(release, &images, super_layouts, published)?
+            .into_iter()
+            .partition(|fetch| kept.has(fetch.to.name));
     let picked = pick_release_files_the_page_cannot_download(
         storage,
         whole
@@ -156,7 +184,18 @@ pub(crate) async fn store_checked_images(
             .chain(built.iter().flat_map(|image| &image.fetches)),
     )
     .await?;
-    fetch_whole_images(storage, &whole, &picked).await?;
+    let kept_whole_bytes = kept_whole.iter().map(|fetch| fetch.to.size).sum();
+    fetch_whole_images(storage, &whole, kept_whole_bytes, &picked).await?;
+    unpack_whole_images(storage, &images_to_store, &firmwares).await?;
+    // The progress of the fetched images already counts each kept image the page fetches whole.
+    let kept_built_or_unpacked = kept_images
+        .iter()
+        .filter(|(_, image)| matches!(image, Image::Built(_) | Image::Stock { .. }));
+    for (partition, _) in kept_built_or_unpacked {
+        storage.report(&Progress::ImageChecked {
+            partition: partition.as_str(),
+        });
+    }
     storage
         .create_file(&StoredName::SharedStore.to_string(), stores.shared.len())
         .await?;
@@ -164,7 +203,7 @@ pub(crate) async fn store_checked_images(
         let files = image.files;
         let own_name = StoredName::OwnStore(files.partition).to_string();
         storage.create_file(&own_name, files.unshared.len()).await?;
-        fetch_image_files(storage, stock_firmware.as_mut(), image, &picked).await?;
+        fetch_image_files(storage, &mut firmwares, image, &picked).await?;
         build_checked_image(storage, files, &stores.shared).await?;
         storage.remove_file(&own_name).await?;
         storage.report(&Progress::ImageChecked {
@@ -177,15 +216,110 @@ pub(crate) async fn store_checked_images(
     Ok(())
 }
 
+async fn open_stock_firmwares(
+    storage: &Storage,
+    release: &Release,
+    images: &[(&PartitionName, &Image)],
+) -> Result<BTreeMap<SourceIndex, OpenedFirmware<PartToRead>>, ReleaseFilesError> {
+    let firmware_sources: BTreeSet<SourceIndex> = images
+        .iter()
+        .flat_map(|(_, image)| image.source_uses())
+        .filter(|&(_, used)| used != SourceUse::GitBlob)
+        .map(|(source, _)| source)
+        .collect();
+    let mut firmwares = BTreeMap::new();
+    for source in firmware_sources {
+        let opened = open_stock_firmware(storage, source, release.source(source)).await?;
+        let _first_opening = firmwares.insert(source, opened);
+    }
+    Ok(firmwares)
+}
+
+async fn store_firmware_parts(
+    storage: &Storage,
+    firmwares: BTreeMap<SourceIndex, OpenedFirmware<PartToRead>>,
+) -> Result<BTreeMap<SourceIndex, OpenedFirmware>, ReleaseFilesError> {
+    let mut stored = BTreeMap::new();
+    for (source, firmware) in firmwares {
+        stored.extend([(source, firmware.store_parts(storage).await?)]);
+    }
+    Ok(stored)
+}
+
+async fn unpack_whole_images(
+    storage: &Storage,
+    images: &[(&PartitionName, &Image)],
+    firmwares: &BTreeMap<SourceIndex, OpenedFirmware>,
+) -> Result<(), ReleaseFilesError> {
+    for &(partition, image) in images {
+        let &Image::Stock {
+            source,
+            partition: ref stock_partition,
+            sha256,
+            size,
+        } = image
+        else {
+            continue;
+        };
+        let OpenedFirmware::ImageArchive(archive) = &firmwares[&source] else {
+            unreachable!("Release::new accepts whole images only from image archives")
+        };
+        let name = StoredName::Image(partition).to_string();
+        let unpacked: Rc<dyn ByteSource> =
+            Rc::new(unpack_image(storage, archive, stock_partition, &name, partition).await?);
+        let found = Sha256Digest::of_body(
+            &SourceBody::new(Rc::clone(&unpacked)),
+            &mut Scratch::new(READ_PIECE_LEN),
+        )
+        .map_err(|source| ReleaseFilesError::Stored { name, source })?;
+        if unpacked.len() != size || found != sha256 {
+            return Err(ReleaseFilesError::ImageDiffers {
+                partition: partition.clone(),
+                listed: sha256,
+                found,
+            });
+        }
+    }
+    Ok(())
+}
+
 pub(crate) struct Fetch<'a> {
     pub(crate) file: RemoteFile,
     pub(crate) to: Destination<'a>,
+}
+
+/// What the opened firmware sources store while the run builds the images.
+struct FirmwareStorage {
+    /// The run stores the parts until it ends.
+    stored_parts: u64,
+    /// The run unpacks one stock image at a time and removes it once it has read its stock files.
+    largest_unpacked_image: u64,
+}
+
+fn firmware_storage(
+    firmwares: &BTreeMap<SourceIndex, OpenedFirmware<PartToRead>>,
+    built: &[ImageFetches<'_, '_>],
+) -> Result<FirmwareStorage, ReleaseFilesError> {
+    let unpacked_lens = built
+        .iter()
+        .flat_map(|image| &image.stock_files)
+        .flat_map(|(source, files)| {
+            files
+                .iter()
+                .map(|file| firmwares[source].unpacked_len(file.partition))
+        })
+        .collect::<Result<Vec<u64>, _>>()?;
+    Ok(FirmwareStorage {
+        stored_parts: firmwares.values().map(OpenedFirmware::stored_bytes).sum(),
+        largest_unpacked_image: unpacked_lens.into_iter().max().unwrap_or(0),
+    })
 }
 
 fn storage_needed(
     images: &[(&PartitionName, &Image)],
     super_layouts: &[Fetch<'_>],
     stores: &BuiltImageStores<'_>,
+    firmware: &FirmwareStorage,
     stored_package: Option<&Package>,
 ) -> u64 {
     let image_bytes: u64 = images.iter().map(|(_, image)| image.size()).sum();
@@ -196,9 +330,9 @@ fn storage_needed(
         .map(|files| files.unshared.len())
         .max()
         .unwrap_or(0);
-    let store_bytes = stores.shared.len() + largest_own_store;
+    let store_bytes = stores.shared.len() + largest_own_store + firmware.largest_unpacked_image;
     let package_bytes = stored_package.map_or(0, |package| package.size);
-    image_bytes + layout_bytes + store_bytes.max(package_bytes)
+    image_bytes + layout_bytes + firmware.stored_parts + store_bytes.max(package_bytes)
 }
 
 fn whole_image_fetches<'a>(
@@ -211,27 +345,32 @@ fn whole_image_fetches<'a>(
         let file = match image {
             Image::Shipped { .. } => published.asset(ReleaseFile::Image(partition)),
             Image::Fetched { blob } => Ok(RemoteFile::Source {
-                source: release.parts().sources[blob.source.0].clone(),
+                source: release.git_repository(blob.source).clone(),
                 path: blob.path.clone(),
             }),
-            Image::Built(_) => return None,
+            Image::Built(_) | Image::Stock { .. } => return None,
         };
         Some(file.map(|file| Fetch {
             file,
-            to: Destination {
-                name: StoredName::Image(partition),
-                offset: 0,
-                size: image.size(),
-                sha256: image.sha256(),
-            },
+            to: image_destination(partition, image),
         }))
     });
     whole.chain(super_layouts.into_iter().map(Ok)).collect()
 }
 
+fn image_destination<'a>(partition: &'a PartitionName, image: &Image) -> Destination<'a> {
+    Destination {
+        name: StoredName::Image(partition),
+        offset: 0,
+        size: image.size(),
+        sha256: image.sha256(),
+    }
+}
+
 async fn fetch_whole_images(
     storage: &Storage,
     fetches: &[Fetch<'_>],
+    kept_bytes: u64,
     picked: &PickedReleaseFiles,
 ) -> Result<(), ReleaseFilesError> {
     for fetch in fetches {
@@ -239,9 +378,9 @@ async fn fetch_whole_images(
             .create_file(&fetch.to.name.to_string(), fetch.to.size)
             .await?;
     }
-    let total = fetches.iter().map(|fetch| fetch.to.size).sum();
+    let total = kept_bytes + fetches.iter().map(|fetch| fetch.to.size).sum::<u64>();
     let page = storage.clone();
-    let arrived = ArrivedBytes::start(0, total, move |done| {
+    let arrived = ArrivedBytes::start(kept_bytes, total, move |done| {
         page.report(&Progress::FetchingImages { done, total });
     });
     fetch_all(storage, fetches, picked, arrived).await?;
@@ -335,9 +474,11 @@ struct ImageStores<'s, 'a> {
     shared: NamedStore<'s, 'a>,
 }
 
+type StockFilesBySource<'a> = BTreeMap<SourceIndex, Vec<StockFile<'a>>>;
+
 struct ImageFetches<'s, 'a> {
     files: &'s BuiltImageFiles<'a>,
-    stock_files: Vec<StockFile<'a>>,
+    stock_files: StockFilesBySource<'a>,
     fetches: Vec<Fetch<'a>>,
 }
 
@@ -371,17 +512,16 @@ fn built_image_fetches<'s, 'a>(
 
 async fn fetch_image_files(
     storage: &Storage,
-    stock_firmware: Option<&mut OpenedFirmware>,
+    firmwares: &mut BTreeMap<SourceIndex, OpenedFirmware>,
     image: &ImageFetches<'_, '_>,
     picked: &PickedReleaseFiles,
 ) -> Result<(), ReleaseFilesError> {
     let partition = image.files.partition;
-    if !image.stock_files.is_empty() {
-        let firmware = stock_firmware.ok_or_else(|| ReleaseFilesError::StockFirmwareMissing {
-            partition: partition.clone(),
-        })?;
-        firmware
-            .read_files(storage, partition, &image.stock_files)
+    for (source, files) in &image.stock_files {
+        firmwares
+            .get_mut(source)
+            .expect("store_checked_images opens every firmware source of the images")
+            .read_files(storage, partition, files)
             .await?;
     }
     let total = image.fetches.iter().map(|fetch| fetch.to.size).sum();
@@ -437,8 +577,8 @@ fn split_store_files<'s, 'a: 's>(
     release: &Release,
     published: &PublishedRelease,
     files: impl IntoIterator<Item = (&'s StoredFile<'a>, StoredName<'a>)>,
-) -> Result<(Vec<StockFile<'a>>, Vec<Fetch<'a>>), ReleaseFilesError> {
-    let mut stock_files = Vec::new();
+) -> Result<(StockFilesBySource<'a>, Vec<Fetch<'a>>), ReleaseFilesError> {
+    let mut stock_files = StockFilesBySource::new();
     let mut fetches = Vec::new();
     for (stored, name) in files {
         let to = Destination {
@@ -448,14 +588,18 @@ fn split_store_files<'s, 'a: 's>(
             sha256: stored.sha256,
         };
         match stored.origin {
-            Origin::Stock { partition, path } => stock_files.push(StockFile {
+            Origin::Stock {
+                source,
+                partition,
+                path,
+            } => stock_files.entry(source).or_default().push(StockFile {
                 partition,
                 path,
                 to,
             }),
             Origin::Source { source, path } => fetches.push(Fetch {
                 file: RemoteFile::Source {
-                    source: release.parts().sources[source.0].clone(),
+                    source: release.git_repository(source).clone(),
                     path: path.clone(),
                 },
                 to,
@@ -510,7 +654,7 @@ fn write_image(
             )
         })
         .collect::<Result<Vec<_>, ReleaseFilesError>>()?;
-    let mut out = HostSink::open(storage.file(image_name)?)?;
+    let mut out = HostSink::open(storage.file_from(image_name, 0)?)?;
     let mut shown = ShownPercent::default();
     let written = build_image(
         stored_file(&image.free_bytes.sha256)?,

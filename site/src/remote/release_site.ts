@@ -4,7 +4,9 @@ import type { PauseBeforeRetry, ReleaseSite, TransferResult } from "../wasm/cont
 import { fetchRemote } from "./fetch.ts";
 import { RELEASES_PATH, releaseManifestPath } from "./release_paths.ts";
 import type { AttemptScheduler } from "./request_scheduler.ts";
-import type { BodySink, ReportRetry } from "./transfer.ts";
+import type { BodySink, RemoteTransfer, ReportRetry } from "./transfer.ts";
+
+const NO_HEADERS = (): Record<string, string> => ({});
 
 function textSink(): BodySink<string> {
   let chunks: Uint8Array<ArrayBuffer>[] = [];
@@ -36,16 +38,20 @@ export class FetchedReleaseSite implements ReleaseSite {
   }
 
   fetchReleases(): Promise<TransferResult<string>> {
-    return this.fetch(new URL(RELEASES_PATH, location.origin).href, textSink());
+    return this.fetch(new URL(RELEASES_PATH, location.origin).href, textSink(), NO_HEADERS);
   }
 
   fetchReleaseManifest(release: bigint): Promise<TransferResult<string>> {
-    return this.fetch(new URL(releaseManifestPath(release), location.origin).href, textSink());
+    return this.fetch(new URL(releaseManifestPath(release), location.origin).href, textSink(), NO_HEADERS);
   }
 
-  fetch<T>(address: string, sink: BodySink<T>): Promise<TransferResult<T>> {
+  fetch<T>(
+    address: string,
+    sink: BodySink<T>,
+    headers: RemoteTransfer<T>["headers"],
+  ): Promise<TransferResult<T>> {
     return fetchRemote(
-      { href: address, headers: {}, sink, reportRetry: this.#reportRetry },
+      { href: address, headers, sink, reportRetry: this.#reportRetry },
       this.#pauseBeforeRetry,
       this.#scheduler,
     );

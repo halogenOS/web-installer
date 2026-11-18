@@ -24,8 +24,8 @@
         cargoLock = {
           lockFile = ./Cargo.lock;
           outputHashes = {
-            "byte-delta-1.0.0" = "sha256-PReYogzbcIj6JNoZhIwKrpIHqO1JQI2/nmzBv47cRW0=";
-            "release-0.1.0" = "sha256-60bL2Q8aX4+m1STKq6UDTmDnfbZ7nqNBcy9Xg2UtmXM=";
+            "byte-delta-1.0.0" = "sha256-NKfYJJGYccdKJ76OFX2VPvpKrHGRswCGrjNw5D0fNxw=";
+            "release-0.1.0" = "sha256-bl5j/KSuqwaZdyu17oxJXA1M9kjRRBc95PLzkxa3+/E=";
           };
         };
       };
@@ -49,7 +49,7 @@
       mkNpmDeps = pkgs: pkgs.fetchNpmDeps {
         name = "web-installer-site-npm-deps";
         src = ./site;
-        hash = "sha256-f0UrEC/LB4dt1Yju27EoPRJdcxLe3FZGG0MU+fb0E7E=";
+        hash = "sha256-4XVHNGJl/mP2LKK3L6MCCYkBnvZ1XHc9zkpyDsnwPoU=";
       };
       mkSiteWasm = pkgs: pkgs.rustPlatform.buildRustPackage (workspaceArgs // {
         pname = "web-installer-wasm";

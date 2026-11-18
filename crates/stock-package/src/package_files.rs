@@ -6,7 +6,7 @@ use std::collections::btree_map::Entry;
 use std::io::Write;
 use std::rc::Rc;
 
-use byte_io::{Body, ByteSource, read_all};
+use byte_io::{Body, ByteSource};
 use sha256::Sha256Digest;
 
 use crate::{CopyFileError, PackageError, PartitionFiles, StockPackage};
@@ -38,9 +38,7 @@ impl PackageFiles {
         path: &str,
         sha256: Sha256Digest,
     ) -> Result<Vec<u8>, PackageError> {
-        let files = self.partition(partition)?;
-        let body = files.file(path, sha256)?;
-        read_all(&*body).map_err(|source| files.read_failure(path, source))
+        self.partition(partition)?.file_bytes(path, sha256)
     }
 
     pub fn copy_file(

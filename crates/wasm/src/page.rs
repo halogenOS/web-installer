@@ -38,6 +38,9 @@ extern "C" {
     #[derive(Clone)]
     pub type StoragePage;
 
+    #[wasm_bindgen(method, catch, js_name = keepFiles)]
+    fn keep_files(this: &StoragePage, names: Vec<String>) -> Result<Promise, JsValue>;
+
     #[wasm_bindgen(method, catch, js_name = createFile)]
     fn create_file(this: &StoragePage, name: &str, size: JsValue) -> Result<Promise, JsValue>;
 
@@ -180,6 +183,12 @@ pub(crate) struct PickedFile {
     pub(crate) file: JsValue,
 }
 
+#[derive(Deserialize)]
+pub(crate) struct KeptFile {
+    pub(crate) name: String,
+    pub(crate) size: u64,
+}
+
 #[derive(Debug)]
 pub(crate) enum OpenFailure {
     Unavailable(PhoneProblem),
@@ -238,6 +247,13 @@ impl Storage {
 
     pub(crate) fn site(&self) -> &ReleaseSite {
         &self.0
+    }
+
+    pub(crate) async fn keep_files(
+        &self,
+        names: Vec<String>,
+    ) -> Result<Vec<KeptFile>, HostFailure> {
+        settle(self.0.keep_files(names)).await
     }
 
     pub(crate) async fn create_file(&self, name: &str, size: u64) -> Result<(), HostFailure> {

@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: The halogenOS Project
 // SPDX-License-Identifier: GPL-3.0-only
+import { PARTIAL_CONTENT, rangeHeader } from "../remote/byte_range.ts";
 import { canDownload, canReadByRange, fetchRemoteRange, waitFor } from "../remote/fetch.ts";
 import { RangedFile } from "../remote/ranged_file.ts";
 import { RequestScheduler, monotonicMilliseconds } from "../remote/request_scheduler.ts";
@@ -8,6 +9,7 @@ import type { BodySink, ReportRetry } from "../remote/transfer.ts";
 import { InstallStore } from "../store/install_store.ts";
 import type {
   FileDigest,
+  KeptFile,
   PageFile,
   PageSink,
   PauseBeforeRetry,
@@ -15,7 +17,6 @@ import type {
   Progress,
   RangeArrival,
   StoragePage,
-  StoredFile,
   TransferResult,
 } from "../wasm/contract.ts";
 import { WorkerMessageKind, type WorkerMessage } from "./messages.ts";
@@ -25,6 +26,12 @@ export interface StoragePorts {
   filesPicked: () => Promise<File[]>;
   pauseBeforeRetry: PauseBeforeRetry;
   post: (message: WorkerMessage) => void;
+}
+
+// A host that answers the range with 206 continues the stored bytes, and the digest goes on over them. A host that
+// answers with 200 sends the whole file again. A body that broke after all its bytes leaves no range to ask for.
+function headersForMissingBytes(stored: number, size: number): Record<string, string> {
+  return stored > 0 && stored < size ? { Range: rangeHeader({ offset: stored, length: size - stored }) } : {};
 }
 
 export class WorkerStoragePage implements StoragePage {
@@ -52,6 +59,10 @@ export class WorkerStoragePage implements StoragePage {
     return this.#site.fetchReleaseManifest(release);
   }
 
+  keepFiles(names: string[]): Promise<KeptFile[]> {
+    return this.#store.keep(names);
+  }
+
   createFile(name: string, size: number): Promise<void> {
     return this.#store.create(name, size);
   }
@@ -66,7 +77,8 @@ export class WorkerStoragePage implements StoragePage {
     const file = this.#store.file(name);
     let received = 0;
     const sink: BodySink<number> = {
-      begin: () => {
+      begin: (response) => {
+        if (response.status === PARTIAL_CONTENT) return;
         received = 0;
         digest.restart();
       },
@@ -79,7 +91,7 @@ export class WorkerStoragePage implements StoragePage {
       end: () => Promise.resolve(received),
     };
     try {
-      return await this.#site.fetch(address, sink);
+      return await this.#site.fetch(address, sink, () => headersForMissingBytes(received, size));
     } finally {
       digest.free();
     }
@@ -121,7 +133,7 @@ export class WorkerStoragePage implements StoragePage {
     }
   }
 
-  file(name: string): StoredFile {
+  file(name: string): PageFile {
     return this.#store.file(name);
   }
 

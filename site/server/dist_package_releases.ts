@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { createReadStream, type Stats } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { lastByteOf } from "../src/remote/byte_range.ts";
 import { MANIFEST } from "../src/remote/release_paths.ts";
 import { FileOpening, type ReleaseSource, type SourceRelease } from "./release_source.ts";
 
@@ -51,7 +52,15 @@ async function readDistPackage(folder: string): Promise<SourceRelease> {
       .map((entry) => ({
         name: entry.name,
         size: entry.info.size,
-        open: () => Promise.resolve({ kind: FileOpening.Opened, body: createReadStream(entry.path) }),
+        open: (range) =>
+          Promise.resolve({
+            kind: FileOpening.Opened,
+            body: createReadStream(
+              entry.path,
+              range === undefined ? {} : { start: range.offset, end: lastByteOf(range) },
+            ),
+            range,
+          }),
       })),
   };
 }

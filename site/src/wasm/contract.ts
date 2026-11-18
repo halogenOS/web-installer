@@ -75,7 +75,10 @@ export interface RangeArrival {
   free(): void;
 }
 
-export type StoredFile = PageFile & PageSink;
+export interface KeptFile {
+  name: string;
+  size: number;
+}
 
 export interface ReleaseSite {
   fetchReleases(): Promise<TransferResult<string>>;
@@ -110,6 +113,7 @@ export type ReleaseFetch =
   | { kind: typeof FetchKind.StockFirmware; file_name: string; address: string };
 
 export interface StoragePage extends ReleaseSite {
+  keepFiles(names: string[]): Promise<KeptFile[]>;
   createFile(name: string, size: number): Promise<void>;
   download(
     address: string,
@@ -125,7 +129,7 @@ export interface StoragePage extends ReleaseSite {
     length: number,
     arrival: RangeArrival,
   ): Promise<TransferResult<number>>;
-  file(name: string): StoredFile;
+  file(name: string): PageFile;
   fileFrom(name: string, offset: number): PageSink;
   canReadByRange(address: string): Promise<boolean>;
   canDownload(address: string): Promise<boolean>;

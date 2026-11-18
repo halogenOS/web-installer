@@ -8,7 +8,7 @@ import type {
   ImageReport,
   StockFirmwareReport,
 } from "../install/run_reports.ts";
-import { formatMegabytes, formatPercent, formatSize, shareOf } from "../ui/amounts.ts";
+import { formatMegabytes, formatPercent, megabytesOf, shareOf } from "../ui/amounts.ts";
 import { BarEdge } from "../ui/bar_edge.ts";
 import type { BarRow } from "../ui/bar_row.ts";
 import { BarTone } from "../ui/bar_tone.ts";
@@ -53,8 +53,12 @@ function running(state: string, tone: BarTone, amount: Amount, format: (amount: 
   return { share: shareOf(amount), tone, fillFrom: BarEdge.Start, state, amount: format(amount), checked: false };
 }
 
-function blockFill({ downloaded, block, readFrom }: BlockDownload): Pick<BarRow, "share" | "fillFrom"> {
-  return { share: shareOf({ done: downloaded, total: block }), fillFrom: FILL_FROM_BLOCK_EDGE[readFrom] };
+function blockAmount({ downloaded, block }: BlockDownload): Amount {
+  return { done: downloaded, total: block };
+}
+
+function blockFill(report: BlockDownload): Pick<BarRow, "share" | "fillFrom"> {
+  return { share: shareOf(blockAmount(report)), fillFrom: FILL_FROM_BLOCK_EDGE[report.readFrom] };
 }
 
 function shippedRow(): BarRow {
@@ -87,21 +91,23 @@ function builtRow(partition: string): BarRow {
 
 function stockFirmwareRow(report: StockFirmwareReport): BarRow {
   switch (report.stage) {
-    case Stage.FetchingStockFirmware:
+    case Stage.FetchingStockFirmware: {
+      const megabytes = megabytesOf(blockAmount(report));
       return {
         ...blockFill(report),
         tone: BarTone.Arriving,
         state: "Downloading",
-        amount: `${formatSize(report.downloaded)} of up to ${formatSize(report.block)}`,
+        amount: `${megabytes.done} MB of up to ${megabytes.total} MB`,
         checked: false,
       };
+    }
     case Stage.StockFirmwareChecked:
       return CHECKED;
     case Stage.StockFirmwareBlockChecked:
       return {
         ...CHECKED,
         ...blockFill(report),
-        amount: `Needed ${formatMegabytes({ done: report.downloaded, total: report.block })}`,
+        amount: `Needed ${formatMegabytes(blockAmount(report))}`,
       };
   }
 }

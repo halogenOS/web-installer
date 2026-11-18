@@ -52,9 +52,6 @@ pub(crate) enum ReleaseFilesError {
         reading: PackageReading,
         source: Box<PackageError>,
     },
-    StockFirmwareMissing {
-        partition: PartitionName,
-    },
     PickedRead {
         name: String,
         source: SourceError,
@@ -178,7 +175,6 @@ impl ReleaseFilesError {
             Self::StockImageFile(source) if is_unreadable(&**source) => RELOAD,
             Self::Build { .. } | Self::FileNotInStore { .. } => REPORT_DEFECT,
             Self::Fetch { .. }
-            | Self::StockFirmwareMissing { .. }
             | Self::ImageArchive(_)
             | Self::StockImageFile(_)
             | Self::FileDiffers(_)
@@ -206,15 +202,15 @@ impl fmt::Display for StorageShortage {
         if self.package_counted {
             return write!(
                 f,
-                "The images and the zip need {} MB of storage in this browser, \
-                 and the browser gives them {} MB",
+                "The install needs {} MB of storage in this browser, counting the zip, \
+                 and the browser gives it {} MB",
                 megabytes(self.needed),
                 megabytes(self.free)
             );
         }
         write!(
             f,
-            "The images need {} MB of storage in this browser, and the browser gives them {} MB",
+            "The install needs {} MB of storage in this browser, and the browser gives it {} MB",
             megabytes(self.needed),
             megabytes(self.free)
         )
@@ -256,10 +252,6 @@ impl fmt::Display for ReleaseFilesError {
             Self::StockPackage { source, .. } => {
                 write!(f, "The installer cannot read the stock package: {source}")
             }
-            Self::StockFirmwareMissing { partition } => write!(
-                f,
-                "The release lists stock files for {partition} but names no stock firmware"
-            ),
             Self::PickedRead { name, source } => {
                 write!(f, "The chosen file {name} cannot be read: {source}")
             }
@@ -329,7 +321,6 @@ impl Error for ReleaseFilesError {
             | Self::ReleasesFetch { .. }
             | Self::ReleaseMissing
             | Self::AssetMissing { .. }
-            | Self::StockFirmwareMissing { .. }
             | Self::FileDiffers(_)
             | Self::ImageDiffers { .. }
             | Self::FileNotInStore { .. } => None,

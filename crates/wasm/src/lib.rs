@@ -16,6 +16,7 @@ mod host_source;
 mod image_archive_files;
 mod install;
 mod install_failure;
+mod kept_images;
 mod number;
 mod package;
 mod package_failure;

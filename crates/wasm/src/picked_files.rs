@@ -42,8 +42,18 @@ impl<'a> From<&'a StockPackage> for AskedFile<'a> {
 
 #[derive(Clone, Copy)]
 pub(crate) enum PickedFileCheck {
-    Length,
-    Sha256,
+    Identity,
+    Content,
+}
+
+impl PickedFileCheck {
+    fn reads_digest(self, awaited: &[AskedFile<'_>], len: u64) -> bool {
+        let same_length = awaited.iter().filter(|file| file.size == len).count();
+        match self {
+            Self::Identity => same_length > 1,
+            Self::Content => same_length > 0,
+        }
+    }
 }
 
 pub(crate) async fn pick_files(
@@ -82,7 +92,7 @@ pub(crate) async fn pick_files(
             total: picks
                 .iter()
                 .map(|(_, source)| source.len())
-                .filter(|&len| has_awaited_length(awaited, len))
+                .filter(|&len| check.reads_digest(awaited, len))
                 .sum(),
             shown: ShownPercent::default(),
         };
@@ -109,27 +119,17 @@ fn recognize(
 ) -> Result<Result<usize, PageFailure>, SourceError> {
     let len = source.len();
     let has_len = |file: &AskedFile<'_>| file.size == len;
-    let index = match check {
-        PickedFileCheck::Length => awaited
+    if !check.reads_digest(awaited, len) {
+        return Ok(awaited
             .iter()
             .position(has_len)
-            .ok_or_else(|| wrong_length_failure(name, len)),
-        PickedFileCheck::Sha256 if !has_awaited_length(awaited, len) => {
-            Err(wrong_length_failure(name, len))
-        }
-        PickedFileCheck::Sha256 => {
-            let found = digests.read(source)?;
-            awaited
-                .iter()
-                .position(|file| has_len(file) && file.sha256 == found)
-                .ok_or_else(|| wrong_digest_failure(name, found))
-        }
-    };
-    Ok(index)
-}
-
-fn has_awaited_length(awaited: &[AskedFile<'_>], len: u64) -> bool {
-    awaited.iter().any(|file| file.size == len)
+            .ok_or_else(|| wrong_length_failure(name, len)));
+    }
+    let found = digests.read(source)?;
+    Ok(awaited
+        .iter()
+        .position(|file| has_len(file) && file.sha256 == found)
+        .ok_or_else(|| wrong_digest_failure(name, found)))
 }
 
 struct PickedFileDigests<'s> {

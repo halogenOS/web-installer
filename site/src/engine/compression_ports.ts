@@ -1,12 +1,24 @@
 // SPDX-FileCopyrightText: The halogenOS Project
 // SPDX-License-Identifier: GPL-3.0-only
 import type { ChunkOperationKind } from "../wasm/contract.ts";
-import type { ChunkToCompress } from "./compression_messages.ts";
+import {
+  CompressionReplyKind,
+  readCompressionReply,
+  type ChunkToCompress,
+  type CompressionReply,
+} from "./compression_messages.ts";
 
 interface CompressionJob {
   kind: ChunkOperationKind;
   bytes: Uint8Array<ArrayBuffer>;
   resolve: (data: Uint8Array) => void;
+  reject: (failure: Error) => void;
+}
+
+function failureOf(reply: Extract<CompressionReply, { kind: typeof CompressionReplyKind.Failed }>): Error {
+  const failure = new Error(reply.message);
+  failure.name = reply.name;
+  return failure;
 }
 
 export class CompressionPorts {
@@ -18,11 +30,11 @@ export class CompressionPorts {
     this.#ports = ports;
     for (const port of ports) {
       port.onmessage = (event: MessageEvent<unknown>) => {
-        const data = event.data;
-        if (!(data instanceof Uint8Array)) {
+        const reply = readCompressionReply(event.data);
+        if (reply === undefined) {
           throw new Error("A compression worker sent a message that the engine worker cannot read.");
         }
-        this.#finish(port, data);
+        this.#finish(port, reply);
       };
     }
   }
@@ -32,15 +44,17 @@ export class CompressionPorts {
   }
 
   compress(kind: ChunkOperationKind, bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array> {
-    return new Promise((resolve) => {
-      this.#waiting.push({ kind, bytes, resolve });
+    return new Promise((resolve, reject) => {
+      this.#waiting.push({ kind, bytes, resolve, reject });
       this.#handOverWaiting();
     });
   }
 
-  #finish(port: MessagePort, data: Uint8Array): void {
-    this.#running.get(port)?.resolve(data);
+  #finish(port: MessagePort, reply: CompressionReply): void {
+    const job = this.#running.get(port);
     this.#running.delete(port);
+    if (reply.kind === CompressionReplyKind.Compressed) job?.resolve(reply.bytes);
+    else job?.reject(failureOf(reply));
     this.#handOverWaiting();
   }
 

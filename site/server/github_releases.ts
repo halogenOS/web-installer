@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import { Readable } from "node:stream";
 import { defineCachedFunction, useRuntimeConfig } from "nitropack/runtime";
+import { PARTIAL_CONTENT, rangeHeader, type ByteRange } from "../src/remote/byte_range.ts";
 import { FileOpening, type OpenedReleaseFile, type ReleaseSource } from "./release_source.ts";
 
 const RELEASES_ADDRESS = "https://api.github.com/repos/halogenOS/releases/releases";
@@ -89,10 +90,10 @@ const fetchGithubReleases = defineCachedFunction(
   { name: "github-releases", getKey: () => "all", maxAge: RELEASE_LIST_SECONDS, swr: true },
 );
 
-async function openGithubAsset(address: string): Promise<OpenedReleaseFile> {
+async function openGithubAsset(address: string, range: ByteRange | undefined): Promise<OpenedReleaseFile> {
   let response: Response;
   try {
-    response = await fetch(address);
+    response = await fetch(address, { headers: range === undefined ? {} : { Range: rangeHeader(range) } });
   } catch (cause) {
     if (cause instanceof TypeError) return { kind: FileOpening.HostUnreachable };
     throw cause;
@@ -101,7 +102,11 @@ async function openGithubAsset(address: string): Promise<OpenedReleaseFile> {
     await response.body?.cancel();
     return { kind: FileOpening.HostRefused, status: response.status };
   }
-  return { kind: FileOpening.Opened, body: Readable.from(response.body) };
+  return {
+    kind: FileOpening.Opened,
+    body: Readable.from(response.body),
+    range: response.status === PARTIAL_CONTENT ? range : undefined,
+  };
 }
 
 export const githubReleaseSource: ReleaseSource = {
@@ -114,7 +119,7 @@ export const githubReleaseSource: ReleaseSource = {
       files: release.assets.map((asset) => ({
         name: asset.name,
         size: asset.size,
-        open: () => openGithubAsset(asset.address),
+        open: (range) => openGithubAsset(asset.address, range),
       })),
     })),
 };

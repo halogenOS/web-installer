@@ -41,7 +41,6 @@ pub(crate) struct PartitionImage {
     size: u64,
     operations: Vec<Operation>,
     runs: BTreeMap<u64, Run>,
-    data: RefCell<BTreeMap<usize, Rc<[u8]>>>,
     last: RefCell<Option<FilledBlocks>>,
 }
 
@@ -65,7 +64,6 @@ impl PartitionImage {
             size,
             operations: Vec::with_capacity(update.operations.len()),
             runs: BTreeMap::new(),
-            data: RefCell::new(BTreeMap::new()),
             last: RefCell::new(None),
         };
         for operation in &update.operations {
@@ -178,24 +176,19 @@ impl PartitionImage {
         let mut last = self.last.borrow_mut();
         let filled = match last.take() {
             Some(filled) if filled.operation == operation => filled,
-            _ => FilledBlocks {
-                operation,
-                bytes: self.operations[operation].fill_blocks(&self.data_of(operation)?)?,
-            },
+            _ => {
+                let payload_operation = &self.operations[operation];
+                FilledBlocks {
+                    operation,
+                    bytes: payload_operation
+                        .fill_blocks(&payload_operation.read_data(&self.payload)?)?,
+                }
+            }
         };
         let start = usize::try_from(skip).expect("a run lies in the bytes of its operation");
         out.copy_from_slice(&filled.bytes[start..start + out.len()]);
         *last = Some(filled);
         Ok(())
-    }
-
-    fn data_of(&self, operation: usize) -> Result<Rc<[u8]>, SourceError> {
-        if let Some(data) = self.data.borrow().get(&operation) {
-            return Ok(Rc::clone(data));
-        }
-        let data: Rc<[u8]> = self.operations[operation].read_data(&self.payload)?.into();
-        let _first_read = self.data.borrow_mut().insert(operation, Rc::clone(&data));
-        Ok(data)
     }
 }
 

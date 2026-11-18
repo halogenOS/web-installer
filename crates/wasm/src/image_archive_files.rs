@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use byte_io::{ByteSource, READ_PIECE_LEN, SourceCursor};
 use image_archive::{ArchiveError, Decoded, ImageArchive};
-use release::{PartitionName, StockPackage, StockPackageAddress};
+use release::{PartitionName, SourceIndex, StockPackage, StockPackageAddress};
 use stock_package::{CopyFileError, PartitionFiles};
 
 use crate::archive_ranges::extract_from_ranges;
@@ -20,9 +20,10 @@ use crate::release_files_failure::ReleaseFilesError;
 use crate::release_images::StoredName;
 use crate::stock_files::StockFile;
 
-pub(crate) struct StockArchive {
+pub(crate) struct StockArchive<Part = StockPart> {
+    pub(crate) source: SourceIndex,
     pub(crate) archive: ImageArchive,
-    pub(crate) parts: Vec<StockPart>,
+    pub(crate) parts: Vec<Part>,
 }
 
 pub(crate) struct StockPart {
@@ -33,6 +34,70 @@ pub(crate) struct StockPart {
 pub(crate) struct PartDownload {
     pub(crate) address: StockPackageAddress,
     pub(crate) stored: String,
+}
+
+/// A part of an opened image archive, before the page stores the parts it reads by range, so
+/// the storage check of the run can come first.
+pub(crate) enum PartToRead {
+    Picked(Rc<dyn ByteSource>),
+    ByRange(StockPackage),
+}
+
+impl PartToRead {
+    /// The page checks a picked part when the person picks it, and a part read by range image by
+    /// image, as the bytes of each image arrive.
+    fn is_checked(&self) -> bool {
+        matches!(self, Self::Picked(_))
+    }
+}
+
+impl<Part> StockArchive<Part> {
+    pub(crate) fn image_len(&self, partition: &PartitionName) -> Result<u64, ReleaseFilesError> {
+        self.archive
+            .image_len(partition.as_str())
+            .map_err(|error| ReleaseFilesError::ImageArchive(Box::new(error)))
+    }
+}
+
+impl StockArchive<PartToRead> {
+    /// The page stores each part it reads by range at full length and reads a picked part in place.
+    pub(crate) fn stored_part_bytes(&self) -> u64 {
+        self.parts
+            .iter()
+            .map(|part| match part {
+                PartToRead::Picked(_) => 0,
+                PartToRead::ByRange(package) => package.size,
+            })
+            .sum()
+    }
+
+    pub(crate) async fn store_parts(
+        self,
+        storage: &Storage,
+    ) -> Result<StockArchive, ReleaseFilesError> {
+        let Self {
+            source,
+            archive,
+            parts: to_read,
+        } = self;
+        let mut parts = Vec::with_capacity(to_read.len());
+        for (index, part) in to_read.into_iter().enumerate() {
+            parts.push(match part {
+                PartToRead::Picked(bytes) => StockPart {
+                    bytes,
+                    download: None,
+                },
+                PartToRead::ByRange(package) => {
+                    store_ranged_part(storage, source, index, package).await?
+                }
+            });
+        }
+        Ok(StockArchive {
+            source,
+            archive,
+            parts,
+        })
+    }
 }
 
 impl StockArchive {
@@ -46,15 +111,16 @@ impl StockArchive {
 
 pub(crate) async fn open_image_archive(
     storage: &Storage,
+    source: SourceIndex,
     parts: &[StockPackage],
-) -> Result<StockArchive, ReleaseFilesError> {
-    let mut opened: BTreeMap<usize, (StockPart, Rc<dyn ByteSource>)> = BTreeMap::new();
+) -> Result<StockArchive<PartToRead>, ReleaseFilesError> {
+    let mut opened: BTreeMap<usize, (PartToRead, Rc<dyn ByteSource>)> = BTreeMap::new();
     for (index, part) in parts.iter().enumerate() {
         if opened.contains_key(&index) {
             continue;
         }
         if storage.can_read_by_range(part.address.as_str()).await? {
-            opened.extend([(index, open_ranged_part(storage, index, part).await?)]);
+            opened.extend([(index, open_ranged_part(storage, part)?)]);
         } else {
             let host = part.address.host();
             let (indexes, awaited): (Vec<usize>, Vec<AskedFile<'_>>) = parts
@@ -68,44 +134,61 @@ pub(crate) async fn open_image_archive(
                 storage,
                 AskedFiles::StockFirmware,
                 &awaited,
-                PickedFileCheck::Sha256,
+                PickedFileCheck::Identity,
             )
             .await?;
-            opened.extend(indexes.into_iter().zip(picked.into_iter().map(|bytes| {
-                let part = StockPart {
-                    bytes: Rc::clone(&bytes),
-                    download: None,
-                };
-                (part, bytes)
-            })));
+            opened.extend(
+                indexes.into_iter().zip(
+                    picked
+                        .into_iter()
+                        .map(|bytes| (PartToRead::Picked(Rc::clone(&bytes)), bytes)),
+                ),
+            );
         }
     }
-    storage.report(&Progress::StockFirmwareChecked);
-    let (parts, header_sources): (Vec<StockPart>, Vec<Rc<dyn ByteSource>>) =
+    let (parts, header_sources): (Vec<PartToRead>, Vec<Rc<dyn ByteSource>>) =
         opened.into_values().unzip();
+    if parts.iter().all(PartToRead::is_checked) {
+        storage.report(&Progress::StockFirmwareChecked);
+    }
     let archive = ImageArchive::open(header_sources.into_iter().map(SourceCursor::new).collect())
         .map_err(|error| ReleaseFilesError::ImageArchive(Box::new(error)))?;
-    Ok(StockArchive { archive, parts })
+    Ok(StockArchive {
+        source,
+        archive,
+        parts,
+    })
 }
 
-async fn open_ranged_part(
+fn open_ranged_part(
     storage: &Storage,
-    index: usize,
     part: &StockPackage,
-) -> Result<(StockPart, Rc<dyn ByteSource>), ReleaseFilesError> {
-    let stored = StoredName::StockPart(index).to_string();
-    storage.create_file(&stored, part.size).await?;
+) -> Result<(PartToRead, Rc<dyn ByteSource>), ReleaseFilesError> {
     let remote = HostSource::open(storage.remote_file(part.address.as_str(), part.size)?).map_err(
         |source| ReleaseFilesError::ImageArchive(Box::new(ArchiveError::Read(source.into()))),
     )?;
-    let ranged = StockPart {
+    Ok((PartToRead::ByRange(part.clone()), Rc::new(remote)))
+}
+
+async fn store_ranged_part(
+    storage: &Storage,
+    source: SourceIndex,
+    index: usize,
+    part: StockPackage,
+) -> Result<StockPart, ReleaseFilesError> {
+    let stored = StoredName::StockPart {
+        source,
+        part: index,
+    }
+    .to_string();
+    storage.create_file(&stored, part.size).await?;
+    Ok(StockPart {
         bytes: Rc::new(open_stored(storage, &stored)?),
         download: Some(PartDownload {
-            address: part.address.clone(),
+            address: part.address,
             stored,
         }),
-    };
-    Ok((ranged, Rc::new(remote)))
+    })
 }
 
 pub(crate) async fn read_archive_files<'a>(
@@ -121,7 +204,11 @@ pub(crate) async fn read_archive_files<'a>(
     }
     let mut done = 0;
     for (partition, files) in by_partition {
-        let image_name = StoredName::StockImage(partition).to_string();
+        let image_name = StoredName::StockImage {
+            source: archive.source,
+            partition,
+        }
+        .to_string();
         let image = unpack_image(storage, archive, partition, &image_name, built).await?;
         storage.report(&progress(done));
         let mut image_files =
@@ -144,18 +231,16 @@ pub(crate) async fn read_archive_files<'a>(
     Ok(())
 }
 
-async fn unpack_image(
+pub(crate) async fn unpack_image(
     storage: &Storage,
     archive: &StockArchive,
     partition: &PartitionName,
     name: &str,
     built: &PartitionName,
 ) -> Result<HostSource, ReleaseFilesError> {
-    let len = archive
-        .archive
-        .image_len(partition.as_str())
-        .map_err(|error| ReleaseFilesError::ImageArchive(Box::new(error)))?;
-    storage.create_file(name, len).await?;
+    storage
+        .create_file(name, archive.image_len(partition)?)
+        .await?;
     if archive.parts.iter().all(|part| part.download.is_none()) {
         write_image(storage, name, built, |sink, progress| {
             archive
@@ -178,7 +263,7 @@ pub(crate) fn write_image(
         name: name.to_owned(),
         source,
     };
-    let mut sink = HostSink::open(storage.file(name)?)?;
+    let mut sink = HostSink::open(storage.file_from(name, 0)?)?;
     let mut shown = ShownPercent::default();
     let _written: u64 = extraction(&mut sink, &mut |decoded| {
         if shown.advances_to(decoded.done, decoded.total) {

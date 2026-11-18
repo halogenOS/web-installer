@@ -62,7 +62,7 @@ pub(crate) async fn pick_release_files_the_page_cannot_download<'f, 'a: 'f>(
         storage,
         AskedFiles::ReleaseFiles,
         &asked,
-        PickedFileCheck::Sha256,
+        PickedFileCheck::Content,
     )
     .await?;
     Ok(PickedReleaseFiles(

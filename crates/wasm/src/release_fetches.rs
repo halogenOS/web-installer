@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: The halogenOS Project
 // SPDX-License-Identifier: GPL-3.0-only
 
-use release::{Release, RepositoryName, StockFirmware, StockPackageAddress, StockPackageName};
+use release::{Release, RepositoryName, Source, StockPackageAddress, StockPackageName};
 use serde::Serialize;
 
 use crate::releases::PublishedRelease;
@@ -37,25 +37,25 @@ pub(crate) fn release_fetches(
             .map(|address| ReleaseFetch::BuildFile {
                 address: address.to_owned(),
             });
-    let source_files = parts.sources.iter().flat_map(|source| {
-        [
+    let source_files = parts.sources.iter().flat_map(|source| match source {
+        Source::Git(git) => vec![
             ReleaseFetch::SourceFiles {
-                repository: source.repository.clone(),
-                address: source.commit_address(),
+                repository: git.repository.clone(),
+                address: git.commit_address(),
             },
             ReleaseFetch::SourceLfsObjects {
-                repository: source.repository.clone(),
-                address: source.lfs_commit_address(),
+                repository: git.repository.clone(),
+                address: git.lfs_commit_address(),
             },
-        ]
+        ],
+        Source::OtaPackage(_) | Source::ImageArchive { .. } => source
+            .stock_packages()
+            .iter()
+            .map(|package| ReleaseFetch::StockFirmware {
+                file_name: package.file_name.clone(),
+                address: package.address.clone(),
+            })
+            .collect(),
     });
-    let stock_files = parts
-        .stock_firmware
-        .iter()
-        .flat_map(StockFirmware::files)
-        .map(|package| ReleaseFetch::StockFirmware {
-            file_name: package.file_name.clone(),
-            address: package.address.clone(),
-        });
-    build_files.chain(source_files).chain(stock_files).collect()
+    build_files.chain(source_files).collect()
 }

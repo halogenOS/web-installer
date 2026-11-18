@@ -18,12 +18,23 @@ export function formatPercent(amount: Amount): string {
   return PERCENT.format(shareOf(amount));
 }
 
-export function formatMegabytes({ done, total }: Amount): string {
+export interface MegabyteTexts {
+  done: string;
+  total: string;
+}
+
+/** Both values of the amount in megabytes, rounded to the precision that the total sets. */
+export function megabytesOf({ done, total }: Amount): MegabyteTexts {
   const totalMegabytes = total / BYTES_PER_MEGABYTE;
   const format = new Intl.NumberFormat(LANGUAGE, {
     maximumFractionDigits: totalMegabytes < WHOLE_MEGABYTES_FROM ? 1 : 0,
   });
-  return `${format.format(done / BYTES_PER_MEGABYTE)} of ${format.format(totalMegabytes)} MB`;
+  return { done: format.format(done / BYTES_PER_MEGABYTE), total: format.format(totalMegabytes) };
+}
+
+export function formatMegabytes(amount: Amount): string {
+  const { done, total } = megabytesOf(amount);
+  return `${done} of ${total} MB`;
 }
 
 export function formatSize(bytes: number): string {

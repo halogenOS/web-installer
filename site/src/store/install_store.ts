@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: The halogenOS Project
 // SPDX-License-Identifier: GPL-3.0-only
-import type { PageSink, StoredFile } from "../wasm/contract.ts";
+import type { KeptFile, PageFile, PageSink } from "../wasm/contract.ts";
 import { QUOTA_EXCEEDED, readExactly, writeUntilRefused } from "./sync_transfer.ts";
 
 const INSTALL_DIRECTORY = "install";
@@ -36,10 +36,9 @@ class SinkFrom implements PageSink {
   }
 }
 
-class SyncFile implements StoredFile {
+class SyncFile implements PageFile {
   readonly #name: string;
   readonly #handle: FileSystemSyncAccessHandle;
-  readonly #fromStart = new SinkFrom(this, 0);
 
   constructor(name: string, handle: FileSystemSyncAccessHandle) {
     this.#name = name;
@@ -56,8 +55,9 @@ class SyncFile implements StoredFile {
     return bytes;
   }
 
-  write(bytes: Uint8Array): number {
-    return this.#fromStart.write(bytes);
+  resize(size: number): void {
+    this.#handle.truncate(size);
+    if (this.#handle.getSize() !== size) throw storageFull(this.#name, size);
   }
 
   sinkFrom(offset: number): PageSink {
@@ -105,13 +105,42 @@ export class InstallStore {
   #directory: Promise<FileSystemDirectoryHandle> | undefined;
   readonly #files = new Map<string, SyncFile>();
 
-  #emptied(): Promise<FileSystemDirectoryHandle> {
-    this.#directory ??= emptyDirectory(INSTALL_DIRECTORY);
+  #installDirectory(): Promise<FileSystemDirectoryHandle> {
+    this.#directory ??= navigator.storage
+      .getDirectory()
+      .then((root) => root.getDirectoryHandle(INSTALL_DIRECTORY, { create: true }));
     return this.#directory;
   }
 
+  async #open(name: string): Promise<SyncFile> {
+    const opened = this.#files.get(name);
+    if (opened !== undefined) return opened;
+    const entry = await (await this.#installDirectory()).getFileHandle(name, { create: true });
+    if (entry.createSyncAccessHandle === undefined) {
+      throw new Error("This browser cannot write files of the page synchronously.");
+    }
+    const file = new SyncFile(name, await entry.createSyncAccessHandle());
+    this.#files.set(name, file);
+    return file;
+  }
+
+  // A listing may skip entries once the folder changes under it, so the listing ends before any entry goes.
+  async keep(names: readonly string[]): Promise<KeptFile[]> {
+    const directory = await this.#installDirectory();
+    const entries: FileSystemHandle[] = [];
+    for await (const entry of directory.values()) entries.push(entry);
+    const kept: KeptFile[] = [];
+    for (const entry of entries) {
+      if (entry.kind === "file" && names.includes(entry.name)) {
+        kept.push({ name: entry.name, size: (await this.#open(entry.name)).size() });
+      } else {
+        await directory.removeEntry(entry.name, { recursive: true });
+      }
+    }
+    return kept;
+  }
+
   async freeStorage(): Promise<number> {
-    await this.#emptied();
     const { quota, usage } = await navigator.storage.estimate();
     if (quota === undefined || usage === undefined) {
       throw new Error("The browser does not report how much it lets the page store.");
@@ -120,14 +149,7 @@ export class InstallStore {
   }
 
   async create(name: string, size: number): Promise<void> {
-    const entry = await (await this.#emptied()).getFileHandle(name, { create: true });
-    if (entry.createSyncAccessHandle === undefined) {
-      throw new Error("This browser cannot write files of the page synchronously.");
-    }
-    const handle = await entry.createSyncAccessHandle();
-    this.#files.set(name, new SyncFile(name, handle));
-    handle.truncate(size);
-    if (handle.getSize() !== size) throw storageFull(name, size);
+    (await this.#open(name)).resize(size);
   }
 
   file(name: string): SyncFile {
@@ -139,7 +161,7 @@ export class InstallStore {
   async remove(name: string): Promise<void> {
     this.file(name).close();
     this.#files.delete(name);
-    await (await this.#emptied()).removeEntry(name);
+    await (await this.#installDirectory()).removeEntry(name);
   }
 
   async removeAll(): Promise<void> {

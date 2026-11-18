@@ -6,8 +6,8 @@ import {
   type PauseBeforeRetry,
   type TransferResult,
 } from "../wasm/contract.ts";
+import { PARTIAL_CONTENT, rangeHeader, type ByteRange } from "./byte_range.ts";
 import {
-  PARTIAL_CONTENT,
   fetchRangeWithRetries,
   fetchWithRetries,
   requestStatusWithRetries,
@@ -24,10 +24,6 @@ export function waitFor(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, milliseconds);
   });
-}
-
-function byteRange(offset: number, length: number): string {
-  return `bytes=${String(offset)}-${String(offset + length - 1)}`;
 }
 
 function networkPorts(pauseBeforeRetry: PauseBeforeRetry, scheduler: AttemptScheduler): RemotePorts {
@@ -49,14 +45,14 @@ export function fetchRemote<T>(
 
 export function fetchRemoteRange<T>(
   href: string,
-  range: { offset: number; length: number },
+  range: ByteRange,
   sink: BodySink<T>,
   reportRetry: ReportRetry,
   pauseBeforeRetry: PauseBeforeRetry,
   scheduler: AttemptScheduler,
 ): Promise<TransferResult<T>> {
   return fetchRangeWithRetries(
-    { href, headers: { Range: byteRange(range.offset, range.length) }, sink, reportRetry },
+    { href, headers: () => ({ Range: rangeHeader(range) }), sink, reportRetry },
     networkPorts(pauseBeforeRetry, scheduler),
   );
 }
@@ -68,7 +64,7 @@ export async function canReadByRange(
   scheduler: AttemptScheduler,
 ): Promise<boolean> {
   const result = await requestStatusWithRetries(
-    { href, headers: { Range: byteRange(0, 1) }, reportRetry },
+    { href, headers: { Range: rangeHeader({ offset: 0, length: 1 }) }, reportRetry },
     networkPorts(pauseBeforeRetry, scheduler),
   );
   return result.kind === TransferEnd.Received && result.value === PARTIAL_CONTENT;
@@ -91,7 +87,7 @@ export function readRangeBlocking(href: string, offset: number, length: number):
   if (length === 0) return new Uint8Array(0);
   const request = new XMLHttpRequest();
   request.open("GET", href, false);
-  request.setRequestHeader("Range", byteRange(offset, length));
+  request.setRequestHeader("Range", rangeHeader({ offset, length }));
   request.responseType = "arraybuffer";
   try {
     request.send();

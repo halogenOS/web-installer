@@ -6,13 +6,15 @@ use std::iter;
 use std::rc::Rc;
 
 use byte_io::{ByteSource, SourceError};
-use release::{ImagePath, PartitionName, StockFirmware, StockPackage};
+use release::{ImagePath, PartitionName, Source, SourceIndex, StockPackage};
 use stock_package::{CopyFileError, PackageError, PackageFiles};
 use wasm_bindgen::JsValue;
 
 use crate::host_sink::HostSink;
 use crate::host_source::HostSource;
-use crate::image_archive_files::{StockArchive, open_image_archive, read_archive_files};
+use crate::image_archive_files::{
+    PartToRead, StockArchive, StockPart, open_image_archive, read_archive_files,
+};
 use crate::page::Storage;
 use crate::picked_files::{AskedFiles, PickedFileCheck, pick_files};
 use crate::progress::Progress;
@@ -20,23 +22,60 @@ use crate::release_files_failure::{PackageReading, ReleaseFilesError};
 use crate::release_images::Destination;
 use crate::retry::{TransferFailure, pause_before_retry_millis};
 
-pub(crate) enum OpenedFirmware {
+pub(crate) enum OpenedFirmware<Part = StockPart> {
     OtaPackage(OpenedPackage),
-    ImageArchive(StockArchive),
+    ImageArchive(StockArchive<Part>),
 }
 
 pub(crate) async fn open_stock_firmware(
     storage: &Storage,
-    firmware: &StockFirmware,
-) -> Result<OpenedFirmware, ReleaseFilesError> {
-    Ok(match firmware {
-        StockFirmware::OtaPackage(package) => {
+    index: SourceIndex,
+    source: &Source,
+) -> Result<OpenedFirmware<PartToRead>, ReleaseFilesError> {
+    Ok(match source {
+        Source::OtaPackage(package) => {
             OpenedFirmware::OtaPackage(open_stock_package(storage, package).await?)
         }
-        StockFirmware::ImageArchive { parts } => {
-            OpenedFirmware::ImageArchive(open_image_archive(storage, parts).await?)
+        Source::ImageArchive { parts } => {
+            OpenedFirmware::ImageArchive(open_image_archive(storage, index, parts).await?)
+        }
+        Source::Git(_) => {
+            unreachable!("Release::new accepts stock files and images only from firmware sources")
         }
     })
+}
+
+impl OpenedFirmware<PartToRead> {
+    /// The page reads an OTA package in place and stores the downloaded parts of an image archive.
+    pub(crate) fn stored_bytes(&self) -> u64 {
+        match self {
+            Self::OtaPackage(_) => 0,
+            Self::ImageArchive(archive) => archive.stored_part_bytes(),
+        }
+    }
+
+    pub(crate) async fn store_parts(
+        self,
+        storage: &Storage,
+    ) -> Result<OpenedFirmware, ReleaseFilesError> {
+        Ok(match self {
+            Self::OtaPackage(package) => OpenedFirmware::OtaPackage(package),
+            Self::ImageArchive(archive) => {
+                OpenedFirmware::ImageArchive(archive.store_parts(storage).await?)
+            }
+        })
+    }
+}
+
+impl<Part> OpenedFirmware<Part> {
+    /// The bytes that the page stores while it reads stock files of the partition. It unpacks the
+    /// whole partition image of an image archive and reads an OTA package in place.
+    pub(crate) fn unpacked_len(&self, partition: &PartitionName) -> Result<u64, ReleaseFilesError> {
+        match self {
+            Self::OtaPackage(_) => Ok(0),
+            Self::ImageArchive(archive) => archive.image_len(partition),
+        }
+    }
 }
 
 impl OpenedFirmware {
@@ -82,7 +121,7 @@ async fn open_stock_package(
             storage,
             AskedFiles::StockFirmware,
             &[package.into()],
-            PickedFileCheck::Length,
+            PickedFileCheck::Identity,
         )
         .await?;
         let file = picked

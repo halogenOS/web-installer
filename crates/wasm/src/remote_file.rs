@@ -3,16 +3,16 @@
 
 use std::fmt;
 
-use release::{RepositoryPath, Source, StockPackageAddress};
+use release::{GitRepository, RepositoryPath, StockPackageAddress};
 
 #[derive(Clone, Debug)]
 pub(crate) enum RemoteFile {
     Source {
-        source: Source,
+        source: GitRepository,
         path: RepositoryPath,
     },
     Lfs {
-        source: Source,
+        source: GitRepository,
         path: RepositoryPath,
     },
     Asset {

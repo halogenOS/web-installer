@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+import { PARTIAL_CONTENT } from "./byte_range.ts";
 import { AttemptLoad, type AttemptScheduler, type ScheduledWork } from "./request_scheduler.ts";
 import {
   TransferEnd,
@@ -18,8 +19,6 @@ export interface RemotePorts {
 
 export type ReportRetry = (failedAttempts: number) => void;
 
-export const PARTIAL_CONTENT = 206;
-
 export interface BodySink<T> {
   begin(response: Response): void;
   chunk(bytes: Uint8Array<ArrayBuffer>): boolean;
@@ -28,7 +27,8 @@ export interface BodySink<T> {
 
 export interface RemoteTransfer<T> {
   href: string;
-  headers: Record<string, string>;
+  // Read before every attempt, so that a retry can ask for only the bytes the sink still lacks.
+  headers: () => Record<string, string>;
   sink: BodySink<T>;
   reportRetry: ReportRetry;
 }
@@ -192,7 +192,7 @@ function fetchBodyWithRetries<T>(
 ): Promise<TransferResult<T>> {
   return sendWithRetries(
     transfer.href,
-    (init) => ports.request(transfer.href, { ...init, ...ANONYMOUS, headers: transfer.headers }),
+    (init) => ports.request(transfer.href, { ...init, ...ANONYMOUS, headers: transfer.headers() }),
     async (response) =>
       hasBody(response) ? receiveBody(response, transfer.sink) : failureOfStatus(response),
     transfer.reportRetry,

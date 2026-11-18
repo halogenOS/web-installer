@@ -26,6 +26,7 @@ pub fn save_dialog_failure() -> JsValue {
 #[derive(Debug)]
 pub(crate) enum PackageFailure {
     Page(HostFailure),
+    Compression(HostFailure),
     SaveDialogFailed,
     Files(ReleaseFilesError),
     Write(PackageError),
@@ -50,7 +51,7 @@ impl PackageFailure {
             Self::Files(failure) => failure.next_step(),
             Self::SaveDialogFailed => "Download the zip again.",
             Self::Page(_) | Self::Write(_) => REPORT_DEFECT,
-            Self::ImagesUnreadable(_) => {
+            Self::ImagesUnreadable(_) | Self::Compression(_) => {
                 "Reload the page, then download the zip again. If this happens again, report this \
                  text to us."
             }
@@ -64,6 +65,12 @@ impl fmt::Display for PackageFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Page(failure) => write!(f, "The browser failed: {failure}"),
+            Self::Compression(failure) => {
+                write!(
+                    f,
+                    "The browser could not compress a part of the zip: {failure}"
+                )
+            }
             Self::Files(failure) => failure.fmt(f),
             Self::SaveDialogFailed => f.write_str("The save dialog of the browser did not open"),
             Self::Write(source) => write!(f, "The zip cannot be written: {source}"),
@@ -101,7 +108,9 @@ impl Error for PackageFailure {
             Self::Write(source) => Some(source),
             Self::ImagesUnreadable(source) => Some(source),
             Self::FileWrite(source) => Some(source),
-            Self::Page(source) | Self::FileClose(source) => Some(source),
+            Self::Page(source) | Self::Compression(source) | Self::FileClose(source) => {
+                Some(source)
+            }
             Self::Files(source) => Some(source),
             Self::SaveDialogFailed | Self::Differs { .. } => None,
         }

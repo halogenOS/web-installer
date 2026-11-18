@@ -5,13 +5,22 @@
 
 use std::{error::Error, fmt, time::Duration};
 
+use http::StatusCode;
 use serde::Deserialize;
 
 const FIRST_PAUSE: Duration = Duration::from_secs(1);
 
 pub const LONGEST_PAUSE: Duration = Duration::from_mins(1);
 
-const TEMPORARY_STATUSES: [u16; 7] = [408, 425, 429, 500, 502, 503, 504];
+const TEMPORARY_STATUSES: [StatusCode; 7] = [
+    StatusCode::REQUEST_TIMEOUT,
+    StatusCode::TOO_EARLY,
+    StatusCode::TOO_MANY_REQUESTS,
+    StatusCode::INTERNAL_SERVER_ERROR,
+    StatusCode::BAD_GATEWAY,
+    StatusCode::SERVICE_UNAVAILABLE,
+    StatusCode::GATEWAY_TIMEOUT,
+];
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
 #[serde(
@@ -72,7 +81,7 @@ pub fn pause_before_retry(failure: &TransferFailure, attempt: u32) -> Option<Pau
         TransferFailure::Status {
             status,
             retry_after,
-        } if TEMPORARY_STATUSES.contains(status) => Some(
+        } if is_temporary(*status) => Some(
             retry_after
                 .as_deref()
                 .and_then(|text| text.trim().parse().ok())
@@ -82,4 +91,8 @@ pub fn pause_before_retry(failure: &TransferFailure, attempt: u32) -> Option<Pau
         ),
         TransferFailure::CrossOriginRefused | TransferFailure::Status { .. } => None,
     }
+}
+
+fn is_temporary(status: u16) -> bool {
+    StatusCode::from_u16(status).is_ok_and(|status| TEMPORARY_STATUSES.contains(&status))
 }

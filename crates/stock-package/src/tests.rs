@@ -19,7 +19,7 @@ use update_metadata::{
 use zip::CompressionMethod;
 use zip::write::{SimpleFileOptions, ZipWriter};
 
-use crate::{PAYLOAD_ENTRY, PackageFiles};
+use crate::{CopyFileError, PAYLOAD_ENTRY, PackageError, PackageFiles};
 
 const BLOCK: usize = 4096;
 
@@ -142,4 +142,21 @@ fn a_file_of_a_partition_is_read_from_the_package() {
         .unwrap();
 
     assert_eq!(read, content);
+}
+
+#[test]
+fn a_copied_file_whose_digest_differs_fails() {
+    let mut package = PackageFiles::open(Rc::new(MemorySource::new(package()))).unwrap();
+
+    let copied = package.copy_file(
+        "system",
+        FILE_NAME,
+        Sha256Digest::of(b"other"),
+        &mut Vec::new(),
+    );
+
+    assert!(matches!(
+        copied,
+        Err(CopyFileError::Package(error)) if matches!(*error, PackageError::FileMismatch { .. })
+    ));
 }

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: The halogenOS Project
 // SPDX-License-Identifier: GPL-3.0-only
 
-use release::{Image, PartitionName, Release, Source, Step, StockFirmware, StockPackage};
+use release::{GitRepository, Image, PartitionName, Release, Source, Step, StockPackage};
 use serde::Serialize;
 
 use crate::page_failure::PageFailure;
@@ -104,8 +104,8 @@ pub(crate) struct ReleasePlan<'a> {
     build: &'a str,
     shipped: Vec<&'a str>,
     built: Vec<&'a str>,
-    sources: &'a [Source],
-    stock_files: &'a [StockPackage],
+    sources: Vec<&'a GitRepository>,
+    stock_files: Vec<&'a StockPackage>,
     install: Vec<&'a Step>,
 }
 
@@ -127,11 +127,12 @@ impl<'a> ReleasePlan<'a> {
             build: parts.build.as_str(),
             shipped: names(shipped),
             built: names(built),
-            sources: &parts.sources,
+            sources: parts.sources.iter().filter_map(Source::git).collect(),
             stock_files: parts
-                .stock_firmware
-                .as_ref()
-                .map_or(&[], StockFirmware::files),
+                .sources
+                .iter()
+                .flat_map(Source::stock_packages)
+                .collect(),
             install: run.steps(release),
         }
     }
