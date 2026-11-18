@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: The halogenOS Project
+# SPDX-License-Identifier: GPL-3.0-only
+result
+result-*
+/target/
+site/node_modules/
+site/dist/
+site/.output/
+site/.nitro/
+site/src/wasm/web_installer_wasm.js
+site/src/wasm/web_installer_wasm_bg.wasm

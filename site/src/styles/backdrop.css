@@ -1,0 +1,75 @@
+/* SPDX-FileCopyrightText: The halogenOS Project */
+/* SPDX-License-Identifier: GPL-3.0-only */
+@utility backdrop-night {
+  background-image:
+    radial-gradient(60% 85% at 78% 45%, var(--glow), transparent 70%),
+    radial-gradient(170% 20% at 50% 96%, var(--glow), transparent 70%);
+}
+
+@utility backdrop-wedge {
+  background-image:
+    radial-gradient(var(--wedge-corner-reach), var(--wedge-corner), transparent 100%),
+    linear-gradient(126deg, var(--wedge-deep) 0%, var(--wedge-core) 50%, var(--wedge-bright) 100%);
+}
+
+@utility backdrop-far {
+  --drift-tile: 320px;
+  opacity: 0.44;
+  background-image:
+    radial-gradient(circle 1.32px at 103.6px 48.3px, var(--fleck-accent-pale-dim) 0 42%, transparent 100%),
+    radial-gradient(circle 0.85px at 171.5px 117px, var(--fleck-neutral-dim) 0 42%, transparent 100%),
+    radial-gradient(circle 0.86px at 12px 138.8px, var(--fleck-cool-dim) 0 42%, transparent 100%),
+    radial-gradient(circle 0.9px at 135.8px 264.6px, var(--fleck-accent-pale-dim) 0 42%, transparent 100%),
+    radial-gradient(circle 1.26px at 200.8px 303.3px, var(--fleck-neutral-dim) 0 42%, transparent 100%),
+    radial-gradient(circle 1.49px at 312.4px 14.9px, var(--fleck-cool-dim) 0 42%, transparent 100%),
+    radial-gradient(circle 1.05px at 46.2px 37.7px, var(--fleck-accent-pale-bright) 0 42%, transparent 100%),
+    radial-gradient(circle 1.31px at 57.8px 186.1px, var(--fleck-neutral-dim) 0 42%, transparent 100%),
+    radial-gradient(circle 0.85px at 175.3px 20.1px, var(--fleck-cool-dim) 0 42%, transparent 100%),
+    radial-gradient(circle 1.05px at 217.7px 136.8px, var(--fleck-accent-pale-dim) 0 42%, transparent 100%),
+    radial-gradient(circle 1.44px at 145px 95.9px, var(--fleck-neutral-bright) 0 42%, transparent 100%),
+    radial-gradient(circle 1.22px at 78.1px 183.8px, var(--fleck-cool-bright) 0 42%, transparent 100%),
+    radial-gradient(circle 1.58px at 233.4px 92.1px, var(--fleck-accent-pale-dim) 0 42%, transparent 100%),
+    radial-gradient(circle 0.92px at 133.8px 242.3px, var(--fleck-neutral-dim) 0 42%, transparent 100%),
+    radial-gradient(circle 1.41px at 12.5px 213.8px, var(--fleck-cool-dim) 0 42%, transparent 100%);
+  background-size: var(--drift-tile) var(--drift-tile);
+}
+
+@utility backdrop-near {
+  --drift-tile: 470px;
+  opacity: 0.38;
+  background-image:
+    radial-gradient(circle 1.87px at 318.2px 368.9px, var(--fleck-neutral-bright) 0 42%, transparent 100%),
+    radial-gradient(circle 1.62px at 185px 468.5px, var(--fleck-accent-pale-dim) 0 42%, transparent 100%),
+    radial-gradient(circle 1.66px at 122.7px 122.4px, var(--fleck-accent-dim) 0 42%, transparent 100%),
+    radial-gradient(circle 1.64px at 50.6px 153px, var(--fleck-neutral-bright) 0 42%, transparent 100%),
+    radial-gradient(circle 1.52px at 94.8px 33.3px, var(--fleck-accent-pale-bright) 0 42%, transparent 100%),
+    radial-gradient(circle 1.82px at 182.6px 344.7px, var(--fleck-accent-bright) 0 42%, transparent 100%),
+    radial-gradient(circle 1.8px at 46.7px 342.2px, var(--fleck-neutral-bright) 0 42%, transparent 100%),
+    radial-gradient(circle 1.9px at 309.4px 140.6px, var(--fleck-accent-pale-bright) 0 42%, transparent 100%),
+    radial-gradient(circle 1.56px at 372.2px 448.3px, var(--fleck-accent-bright) 0 42%, transparent 100%),
+    radial-gradient(circle 1.73px at 343.7px 376.7px, var(--fleck-neutral-dim) 0 42%, transparent 100%);
+  background-size: var(--drift-tile) var(--drift-tile);
+}
+
+@utility backdrop-spore {
+  --drift-tile: 880px;
+  background-image:
+    radial-gradient(circle 5.4px at 78px 96px, var(--fleck-spore-accent) 0 34%, transparent 100%),
+    radial-gradient(circle 4.2px at 496px 212px, var(--fleck-spore-cool) 0 34%, transparent 100%),
+    radial-gradient(circle 6.1px at 268px 604px, var(--fleck-spore-pale) 0 34%, transparent 100%),
+    radial-gradient(circle 4.8px at 702px 448px, var(--fleck-spore-accent) 0 34%, transparent 100%),
+    radial-gradient(circle 5.6px at 604px 786px, var(--fleck-spore-cool) 0 34%, transparent 100%);
+  background-size: var(--drift-tile) var(--drift-tile);
+}
+
+@keyframes drift {
+  to {
+    background-position: 0 calc(var(--drift-tile) * -1);
+  }
+}
+
+@theme {
+  --animate-drift-far: drift 150s steps(320) infinite;
+  --animate-drift-near: drift 98s steps(470) infinite;
+  --animate-drift-spore: drift 210s steps(880) infinite;
+}

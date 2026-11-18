@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: The halogenOS Project
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "stock-package"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+byte-io.workspace = true
+bzip2-rs.workspace = true
+fs-read.workspace = true
+lzma-rust2.workspace = true
+prost.workspace = true
+sha256.workspace = true
+update-metadata.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+fs-read = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

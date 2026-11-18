@@ -1,0 +1,73 @@
+/* SPDX-FileCopyrightText: The halogenOS Project */
+/* SPDX-License-Identifier: GPL-3.0-only */
+@import "tailwindcss";
+@import "@fontsource-variable/quicksand";
+@import "@fontsource-variable/figtree";
+@import "./colour.css";
+@import "./field.css";
+@import "./backdrop.css";
+
+@theme {
+  --font-display: "Quicksand Variable", sans-serif;
+  --font-body: "Figtree Variable", sans-serif;
+
+  --text-code: 0.875em;
+
+  --radius-cell: 7px;
+  --spacing-focus: 3px;
+
+  --breakpoint-row: 34rem;
+  --breakpoint-rail: 60rem;
+
+  --animate-arrive: arrive 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@theme inline {
+  --animate-block-pulse: block-pulse 1.05s ease-in-out calc(var(--block) * 0.15s) infinite;
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes block-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+
+  40% {
+    opacity: 1;
+  }
+}
+
+@utility focus-ring {
+  outline: var(--spacing-focus) solid var(--color-outline);
+  outline-offset: var(--spacing-focus);
+}
+
+@utility scroll-shadows {
+  --scroll-shadow: light-dark(rgb(0 0 0 / 16%), rgb(0 0 0 / 60%));
+  background-image:
+    linear-gradient(var(--color-surface) 30%, transparent),
+    linear-gradient(transparent, var(--color-surface) 70%),
+    radial-gradient(farthest-side at 50% 0, var(--scroll-shadow), transparent),
+    radial-gradient(farthest-side at 50% 100%, var(--scroll-shadow), transparent);
+  background-position: top, bottom, top, bottom;
+  background-size: 100% 2.5rem, 100% 2.5rem, 100% 1rem, 100% 1rem;
+  background-repeat: no-repeat;
+  background-attachment: local, local, scroll, scroll;
+}
+
+@layer base {
+  body {
+    @apply bg-bg font-body text-[0.9375rem]/[1.55] text-on-bg tabular-nums antialiased;
+  }
+
+  :focus-visible {
+    @apply focus-ring;
+  }
+}

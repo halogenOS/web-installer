@@ -1,0 +1,5 @@
+{
+  "interface": { "classCode": 255, "subclassCode": 66, "protocolCode": 3 },
+  "source": "the interface match of match_fastboot_with_serial (class 0xff, subclass 0x42, protocol 0x03) in fastboot/fastboot.cpp, in platform/system/core at refs/tags/android-17.0.0_r1 on android.googlesource.com",
+  "read": "2026-11-12"
+}

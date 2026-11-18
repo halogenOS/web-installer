@@ -1,0 +1,124 @@
+/* SPDX-FileCopyrightText: The halogenOS Project */
+/* SPDX-License-Identifier: GPL-3.0-only */
+:root {
+  color-scheme: light dark;
+
+  --_base-130: oklch(0.13 0.016 250.87);
+  --_base-170: oklch(0.17 0.021 250.87);
+  --_base-210: oklch(0.21 0.025 250.87);
+  --_base-280: oklch(0.28 0.033 250.87);
+  --_base-400: oklch(0.4 0.044 250.87);
+  --_base-500: oklch(0.5 0.045 250.87);
+  --_base-600: oklch(0.6 0.045 250.87);
+  --_base-650: oklch(0.65 0.045 250.87);
+  --_base-700: oklch(0.7 0.045 250.87);
+  --_base-900: oklch(0.9 0.039 250.87);
+  --_base-950: oklch(0.95 0.024 250.87);
+  --_base-970: oklch(0.97 0.014 250.87);
+  --_base-980: oklch(0.98 0.009 250.87);
+  --_base-990: oklch(0.99 0.004 250.87);
+
+  --_accent-170: oklch(0.17 0.04 227.17);
+  --_accent-400: oklch(0.4 0.077 227.17);
+  --_accent-500: oklch(0.5 0.096 227.17);
+  --_accent-600: oklch(0.6 0.116 227.17);
+  --_accent-700: oklch(0.7 0.134 227.17);
+  --_accent-800: oklch(0.8 0.131 227.17);
+  --_accent-900: oklch(0.9 0.062 227.17);
+  --_accent-980: oklch(0.98 0.011 227.17);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+@theme {
+  --color-*: initial;
+
+  --color-bg: light-dark(var(--_base-980), var(--_base-130));
+  --color-surface: light-dark(var(--_base-990), var(--_base-170));
+  --color-surface-raised: light-dark(var(--_base-990), var(--_base-210));
+
+  --color-on-bg: light-dark(var(--_base-170), var(--_base-950));
+  --color-on-bg-secondary: light-dark(var(--_base-500), var(--_base-650));
+  --color-on-surface: light-dark(var(--_base-170), var(--_base-950));
+  --color-on-surface-secondary: light-dark(var(--_base-500), var(--_base-600));
+  --color-on-accent: light-dark(var(--_accent-980), var(--_accent-170));
+
+  --color-accent: light-dark(var(--_accent-500), var(--_accent-700));
+  --color-accent-hover: light-dark(var(--_accent-400), var(--_accent-800));
+
+  --color-border: light-dark(var(--_base-900), var(--_base-280));
+  --color-skipped: light-dark(oklch(0.92 0.008 250.87), oklch(0.22 0.008 250.87));
+  --color-outline: light-dark(var(--_accent-500), var(--_accent-900));
+  --color-hover-on-surface: light-dark(var(--_base-970), var(--_base-210));
+
+  --color-error: light-dark(oklch(0.58 0.2 25), oklch(0.65 0.2 25));
+
+  --color-wedge-ink: oklch(0.97 0.008 250.87);
+  --color-wedge-outline: light-dark(oklch(0.68 0.14 245), oklch(0.76 0.13 240));
+}
+
+:root {
+  --wedge-deep: light-dark(oklch(0.44 0.155 261.5), oklch(0.4 0.163 261.5));
+  --wedge-core: light-dark(oklch(0.52 0.16 253.8), oklch(0.549 0.163 253.8));
+  --wedge-bright: light-dark(oklch(0.6 0.145 243), oklch(0.686 0.141 240));
+  --wedge-corner: light-dark(
+    color-mix(in oklab, oklch(0.24 0.1 262) 60%, transparent),
+    color-mix(in oklab, oklch(0.2 0.09 262) 80%, transparent)
+  );
+
+  --glow: light-dark(
+    color-mix(in oklab, var(--_accent-500) 10%, transparent),
+    color-mix(in oklab, var(--_accent-600) 15%, transparent)
+  );
+
+  --fleck-neutral-dim: light-dark(
+    color-mix(in oklab, var(--_base-400) 32%, transparent),
+    color-mix(in oklab, var(--_accent-980) 51%, transparent)
+  );
+  --fleck-neutral-bright: light-dark(
+    color-mix(in oklab, var(--_base-400) 42%, transparent),
+    color-mix(in oklab, var(--_accent-980) 66%, transparent)
+  );
+  --fleck-accent-pale-dim: light-dark(
+    color-mix(in oklab, var(--_accent-500) 30%, transparent),
+    color-mix(in oklab, var(--_accent-900) 44%, transparent)
+  );
+  --fleck-accent-pale-bright: light-dark(
+    color-mix(in oklab, var(--_accent-500) 44%, transparent),
+    color-mix(in oklab, var(--_accent-900) 69%, transparent)
+  );
+  --fleck-accent-dim: light-dark(
+    color-mix(in oklab, var(--_accent-400) 36%, transparent),
+    color-mix(in oklab, var(--_accent-700) 56%, transparent)
+  );
+  --fleck-accent-bright: light-dark(
+    color-mix(in oklab, var(--_accent-400) 43%, transparent),
+    color-mix(in oklab, var(--_accent-700) 67%, transparent)
+  );
+  --fleck-cool-dim: light-dark(
+    color-mix(in oklab, var(--_base-500) 31%, transparent),
+    color-mix(in oklab, var(--_base-900) 45%, transparent)
+  );
+  --fleck-cool-bright: light-dark(
+    color-mix(in oklab, var(--_base-500) 45%, transparent),
+    color-mix(in oklab, var(--_base-900) 70%, transparent)
+  );
+  --fleck-spore-accent: light-dark(
+    color-mix(in oklab, var(--_accent-400) 17%, transparent),
+    color-mix(in oklab, var(--_accent-700) 21%, transparent)
+  );
+  --fleck-spore-cool: light-dark(
+    color-mix(in oklab, var(--_base-500) 15%, transparent),
+    color-mix(in oklab, var(--_base-700) 18%, transparent)
+  );
+  --fleck-spore-pale: light-dark(
+    color-mix(in oklab, var(--_accent-500) 13%, transparent),
+    color-mix(in oklab, var(--_accent-900) 14%, transparent)
+  );
+}

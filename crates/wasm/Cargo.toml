@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: The halogenOS Project
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+byte-io.workspace = true
+failure-text.workspace = true
+fastboot.workspace = true
+image-archive.workspace = true
+image-build.workspace = true
+ota-package.workspace = true
+js-sys.workspace = true
+release.workspace = true
+serde.workspace = true
+serde-wasm-bindgen.workspace = true
+serde_json.workspace = true
+sha256.workspace = true
+stock-package.workspace = true
+transfer-retry.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,44 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1794872590,
+        "narHash": "sha256-E+XLAfnC7+bdr4qlEgRv6cdGmiqTU5oeFNKCha7epqQ=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "f68407657ad294471eb4b2e65d193df26edf729f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-26.05",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "website": "website"
+      }
+    },
+    "website": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1789679994,
+        "narHash": "sha256-OGE+9rW5LXZSZYccHrUrWSOzSOR1dsB53EhRttfCTaQ=",
+        "owner": "halogenOS",
+        "repo": "website-2026",
+        "rev": "45a453b8e3e97119a0155feaff609b6d7a79b496",
+        "type": "github"
+      },
+      "original": {
+        "owner": "halogenOS",
+        "repo": "website-2026",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
