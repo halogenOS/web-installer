@@ -11,7 +11,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 [[package]]
 name = "app-import"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 dependencies = [
  "flate2",
  "zip-records",
@@ -73,7 +73,7 @@ dependencies = [
 [[package]]
 name = "byte-io"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 
 [[package]]
 name = "bytes"
@@ -121,7 +121,7 @@ checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 [[package]]
 name = "counted"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 
 [[package]]
 name = "cpufeatures"
@@ -168,7 +168,7 @@ dependencies = [
 [[package]]
 name = "dex-import"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 dependencies = [
  "zip-records",
 ]
@@ -214,7 +214,7 @@ dependencies = [
 [[package]]
 name = "failure-text"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 
 [[package]]
 name = "fastboot"
@@ -228,7 +228,7 @@ dependencies = [
 [[package]]
 name = "file-meta"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 dependencies = [
  "serde",
 ]
@@ -245,7 +245,7 @@ dependencies = [
 [[package]]
 name = "fs-read"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 dependencies = [
  "byte-io",
  "ext4-view",
@@ -330,7 +330,7 @@ dependencies = [
 [[package]]
 name = "image-build"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 dependencies = [
  "app-import",
  "blob-fixups",
@@ -427,7 +427,7 @@ checksum = "7ef0d4ed8669f8f8826eb00dc878084aa8f253506c4fd5e8f58f5bce72ddb97e"
 [[package]]
 name = "lz4hc"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 
 [[package]]
 name = "lzma-rust2"
@@ -441,7 +441,7 @@ dependencies = [
 [[package]]
 name = "lzma-sdk-xz"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 dependencies = [
  "byte-io",
  "crc32fast",
@@ -468,7 +468,7 @@ dependencies = [
 [[package]]
 name = "ota-package"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 dependencies = [
  "base64",
  "byte-io",
@@ -554,7 +554,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 [[package]]
 name = "release"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 dependencies = [
  "blob-fixups",
  "byte-delta",
@@ -653,7 +653,7 @@ dependencies = [
 [[package]]
 name = "sha256"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 dependencies = [
  "byte-io",
  "serde",
@@ -675,7 +675,7 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 [[package]]
 name = "sparse-image"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 dependencies = [
  "byte-io",
 ]
@@ -692,6 +692,7 @@ dependencies = [
  "sha256",
  "update-metadata",
  "zip",
+ "zip-records",
 ]
 
 [[package]]
@@ -760,7 +761,7 @@ checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 [[package]]
 name = "update-metadata"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 dependencies = [
  "prost",
 ]
@@ -897,12 +898,12 @@ dependencies = [
 [[package]]
 name = "zip-records"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 
 [[package]]
 name = "zlib-deflate"
 version = "0.1.0"
-source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea#89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea"
+source = "git+https://git.halogenos.org/halogenOS/android_build_dist-package?rev=b1dab044a27cb0383619f802df11a1433bc792fb#b1dab044a27cb0383619f802df11a1433bc792fb"
 
 [[package]]
 name = "zlib-rs"

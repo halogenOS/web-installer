@@ -5,7 +5,7 @@ use std::io::{self, Read};
 use std::ops::Range;
 use std::rc::Rc;
 
-use byte_io::{ByteSource, Digest, SourceError};
+use byte_io::{ByteSource, Digest, SourceError, to_len};
 use sha256::Sha256Digest;
 use update_metadata::install_operation::Type;
 
@@ -64,15 +64,17 @@ pub(crate) struct Operation {
 }
 
 impl Operation {
-    pub fn fill_blocks(&self, data: &[u8]) -> Result<Vec<u8>, SourceError> {
-        let mut bytes = self
+    /// Decodes `data` into the bytes that the operation writes from the start of its blocks. The
+    /// rest of its last block is zeros.
+    pub fn decode_data(&self, data: &[u8]) -> Result<Vec<u8>, SourceError> {
+        let bytes = self
             .storage
             .decode(data, self.filled_len)
             .map_err(|source| SourceError::Decode {
                 range: self.data.clone(),
                 source,
             })?;
-        let len = bytes.len() as u64;
+        let len = to_len(bytes.len());
         if len > self.filled_len {
             return Err(SourceError::BodyExceedsLength {
                 declared: self.filled_len,
@@ -84,8 +86,6 @@ impl Operation {
                 delivered: len,
             });
         }
-        let padding = usize::try_from(self.filled_len - len).expect("less than one block");
-        bytes.resize(bytes.len() + padding, 0);
         Ok(bytes)
     }
 

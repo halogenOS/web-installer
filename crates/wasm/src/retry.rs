@@ -8,6 +8,13 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::host::HostFailure;
 
+/// Returns the milliseconds to wait before retry number `attempt` of a transfer that ended in
+/// `failure`, or nothing when the failure does not get a retry.
+///
+/// # Errors
+///
+/// Fails with a [host contract violation](crate#failures) when `failure` is not a transfer
+/// failure.
 #[wasm_bindgen(js_name = pauseBeforeRetry)]
 pub fn pause_before_retry_ms(failure: JsValue, attempt: u32) -> Result<Option<f64>, JsValue> {
     let failure: TransferFailure = serde_wasm_bindgen::from_value(failure)

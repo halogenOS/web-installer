@@ -25,7 +25,7 @@
           lockFile = ./Cargo.lock;
           outputHashes = {
             "byte-delta-1.0.0" = "sha256-NKfYJJGYccdKJ76OFX2VPvpKrHGRswCGrjNw5D0fNxw=";
-            "release-0.1.0" = "sha256-4SeD+kkVE586eaGCzRDKbtC305xnjJC6iXX/BG9IFr0=";
+            "release-0.1.0" = "sha256-Az7nsQPfpzWj7nf94/NQx+lTDHQYJMBEZBkY2/Bakag=";
           };
         };
       };

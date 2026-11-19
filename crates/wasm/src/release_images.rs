@@ -6,7 +6,7 @@ use std::fmt::{self, Display, Formatter};
 use std::io::Write;
 use std::rc::Rc;
 
-use byte_io::{Body, ByteSource, READ_PIECE_LEN, Scratch, SliceSource, SourceBody};
+use byte_io::{Body, ByteSource, READ_PIECE_LEN, Scratch, SliceSource, SourceBody, to_len};
 use image_build::{FileToFill, ImageBuildError, build_image};
 use release::{
     BuiltImage, BuiltImageFiles, BuiltImageStores, FileStore, Image, Origin, Package,
@@ -459,7 +459,7 @@ async fn received(
 
 fn lfs_pointer_facts(to: &Destination<'_>) -> (u64, Sha256Digest) {
     let pointer = lfs_pointer(to.sha256, to.size);
-    (pointer.len() as u64, Sha256Digest::of(pointer.as_bytes()))
+    (to_len(pointer.len()), Sha256Digest::of(pointer.as_bytes()))
 }
 
 #[derive(Clone, Copy)]
@@ -649,7 +649,8 @@ fn write_image(
                 content,
                 stored_file(&content.fetched_file().sha256)?,
                 |sha256| {
-                    stored_file(sha256).map(|file| Rc::new(SourceBody::new(file)) as Rc<dyn Body>)
+                    stored_file(sha256)
+                        .map(|file| -> Rc<dyn Body> { Rc::new(SourceBody::new(file)) })
                 },
             )
         })

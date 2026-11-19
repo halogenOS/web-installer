@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::rc::Rc;
 
-use byte_io::{ByteSource, SourceError, clamp_len};
+use byte_io::{ByteSource, SourceError, clamp_len, to_len};
 use update_metadata::PartitionUpdate;
 use update_metadata::install_operation::Type;
 
@@ -20,7 +20,7 @@ struct Run {
     skip: u64,
 }
 
-struct FilledBlocks {
+struct DecodedData {
     operation: usize,
     bytes: Vec<u8>,
 }
@@ -41,7 +41,7 @@ pub(crate) struct PartitionImage {
     size: u64,
     operations: Vec<Operation>,
     runs: BTreeMap<u64, Run>,
-    last: RefCell<Option<FilledBlocks>>,
+    last: RefCell<Option<DecodedData>>,
 }
 
 impl PartitionImage {
@@ -174,20 +174,27 @@ impl PartitionImage {
 
     fn read_run(&self, operation: usize, skip: u64, out: &mut [u8]) -> Result<(), SourceError> {
         let mut last = self.last.borrow_mut();
-        let filled = match last.take() {
-            Some(filled) if filled.operation == operation => filled,
+        let decoded = match last.take() {
+            Some(decoded) if decoded.operation == operation => decoded,
             _ => {
                 let payload_operation = &self.operations[operation];
-                FilledBlocks {
+                DecodedData {
                     operation,
                     bytes: payload_operation
-                        .fill_blocks(&payload_operation.read_data(&self.payload)?)?,
+                        .decode_data(&payload_operation.read_data(&self.payload)?)?,
                 }
             }
         };
-        let start = usize::try_from(skip).expect("a run lies in the bytes of its operation");
-        out.copy_from_slice(&filled.bytes[start..start + out.len()]);
-        *last = Some(filled);
+        // A run lies within the blocks of its operation. Past the decoded bytes, those blocks are
+        // zeros.
+        let from_skip = usize::try_from(skip)
+            .ok()
+            .and_then(|start| decoded.bytes.get(start..))
+            .unwrap_or_default();
+        let copied = from_skip.len().min(out.len());
+        out[..copied].copy_from_slice(&from_skip[..copied]);
+        out[copied..].fill(0);
+        *last = Some(decoded);
         Ok(())
     }
 }
@@ -198,10 +205,10 @@ impl ByteSource for PartitionImage {
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), SourceError> {
-        self.ensure_range(offset, buf.len() as u64)?;
+        self.ensure_range(offset, to_len(buf.len()))?;
         let mut done = 0;
         while done < buf.len() {
-            let at = offset + done as u64;
+            let at = offset + to_len(done);
             let rest = &mut buf[done..];
             let piece = match self.piece_at(at, rest.len()) {
                 Piece::Run {
@@ -225,14 +232,16 @@ impl ByteSource for PartitionImage {
     fn read_up_to(&self, offset: u64, len: u64) -> Result<Vec<u8>, SourceError> {
         self.ensure_range(offset, len)?;
         let mut bytes = Vec::new();
-        while (bytes.len() as u64) < len {
-            let at = offset + bytes.len() as u64;
-            let piece = match self.piece_at(at, clamp_len(len - bytes.len() as u64, usize::MAX)) {
+        let mut filled = 0;
+        while filled < len {
+            let at = offset + filled;
+            let piece = match self.piece_at(at, clamp_len(len - filled, usize::MAX)) {
                 Piece::Run { len, .. } | Piece::Zeros { len } => len,
             };
             let start = bytes.len();
             bytes.resize(start + piece, 0);
             self.read_at(at, &mut bytes[start..])?;
+            filled += to_len(piece);
         }
         Ok(bytes)
     }

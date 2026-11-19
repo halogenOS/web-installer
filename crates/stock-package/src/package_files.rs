@@ -6,7 +6,7 @@ use std::collections::btree_map::Entry;
 use std::io::Write;
 use std::rc::Rc;
 
-use byte_io::{Body, ByteSource};
+use byte_io::ByteSource;
 use sha256::Sha256Digest;
 
 use crate::{CopyFileError, PackageError, PartitionFiles, StockPackage};
@@ -17,6 +17,14 @@ pub struct PackageFiles {
 }
 
 impl PackageFiles {
+    /// Opens the stock OTA package `package`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`PackageError`] for the first part of `package` that the function cannot read
+    /// or that does not belong to a full stock OTA package. The function reads the zip archive,
+    /// then the `payload.bin` entry, which the archive must store uncompressed, then the payload
+    /// header and the manifest.
     pub fn open(package: Rc<dyn ByteSource>) -> Result<Self, PackageError> {
         Ok(Self {
             package: StockPackage::open(package)?,
@@ -24,23 +32,14 @@ impl PackageFiles {
         })
     }
 
-    pub fn file_with_digest(
-        &mut self,
-        partition: &str,
-        path: &str,
-    ) -> Result<(Rc<dyn Body>, Sha256Digest), PackageError> {
-        self.partition(partition)?.file_with_digest(path)
-    }
-
-    pub fn file_bytes(
-        &mut self,
-        partition: &str,
-        path: &str,
-        sha256: Sha256Digest,
-    ) -> Result<Vec<u8>, PackageError> {
-        self.partition(partition)?.file_bytes(path, sha256)
-    }
-
+    /// Writes the file `path` of the partition `partition` to `sink` and returns the number of
+    /// bytes written.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CopyFileError::Package`] when the function cannot read the image of `partition`
+    /// from the payload or the filesystem in that image. Otherwise it returns the error of
+    /// [`PartitionFiles::copy_file`], and `sink` may then already contain part or all of the file.
     pub fn copy_file(
         &mut self,
         partition: &str,

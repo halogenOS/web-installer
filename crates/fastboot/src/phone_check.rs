@@ -105,6 +105,14 @@ impl<E> From<PhoneCheckFailure> for Stop<E> {
     }
 }
 
+/// Runs the checks that the install of `release` needs on the phone and reports each result to
+/// `on_check` as it comes.
+///
+/// # Errors
+///
+/// Returns a [`FastbootError`] when the phone cannot be asked: the link fails, or the phone
+/// refuses or garbles a command. A phone that fails a check is not an error of this function. The
+/// function returns that failure as the inner `Err`. The checks after the failed one do not run.
 pub async fn check_phone<L: Link>(
     fastboot: &mut Fastboot<L>,
     release: &Release,

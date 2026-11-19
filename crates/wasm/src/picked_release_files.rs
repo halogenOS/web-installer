@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::io::Write;
 use std::rc::Rc;
 
-use byte_io::{ByteSource, CopyError, READ_PIECE_LEN, Scratch, SourceBody, visit_pieces};
+use byte_io::{ByteSource, CopyError, READ_PIECE_LEN, Scratch, SourceBody, to_len, visit_pieces};
 
 use crate::arrived_bytes::FileArrival;
 use crate::host_sink::HostSink;
@@ -98,7 +98,7 @@ impl PickedReleaseFile {
             &mut Scratch::new(READ_PIECE_LEN),
             |piece| {
                 sink.write_all(piece).map_err(CopyError::Sink)?;
-                arrival.add(piece.len() as u64);
+                arrival.add(to_len(piece.len()));
                 Ok(())
             },
         )

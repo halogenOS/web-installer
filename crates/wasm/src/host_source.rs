@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: The halogenOS Project
 // SPDX-License-Identifier: GPL-3.0-only
 
-use byte_io::{ByteSource, SourceError};
+use byte_io::{ByteSource, SourceError, to_len};
 use js_sys::Uint8Array;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::{JsCast, JsValue};
@@ -46,8 +46,9 @@ impl ByteSource for HostSource {
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), SourceError> {
-        self.ensure_range(offset, buf.len() as u64)?;
-        self.page_bytes(offset, buf.len() as u64)?.copy_to(buf);
+        let len = to_len(buf.len());
+        self.ensure_range(offset, len)?;
+        self.page_bytes(offset, len)?.copy_to(buf);
         Ok(())
     }
 

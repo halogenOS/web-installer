@@ -22,7 +22,10 @@ export type PackageFileChoice =
   | { kind: typeof FileChoice.Cancelled }
   | { kind: typeof FileChoice.DialogFailed };
 
-export async function choosePackageFile(window: Window, build: string): Promise<PackageFileChoice> {
+export async function choosePackageFile(
+  window: Pick<Window, "showSaveFilePicker">,
+  build: string,
+): Promise<PackageFileChoice> {
   const name = `${build}.zip`;
   const showSaveFilePicker = window.showSaveFilePicker;
   if (showSaveFilePicker === undefined) {

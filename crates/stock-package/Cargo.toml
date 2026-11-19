@@ -15,6 +15,7 @@ prost.workspace = true
 sha256.workspace = true
 update-metadata.workspace = true
 zip.workspace = true
+zip-records.workspace = true
 
 [dev-dependencies]
 fs-read = { workspace = true, features = ["testing"] }

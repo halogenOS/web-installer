@@ -20,26 +20,26 @@ wasm-bindgen = "=0.2.130"
 wasm-bindgen-futures = "=0.4.80"
 zip = { version = "=9.2.0", default-features = false, features = ["deflate"] }
 
-byte-io = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea" }
-failure-text = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea" }
+byte-io = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "b1dab044a27cb0383619f802df11a1433bc792fb" }
+failure-text = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "b1dab044a27cb0383619f802df11a1433bc792fb" }
 fastboot = { path = "crates/fastboot" }
-fs-read = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea" }
+fs-read = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "b1dab044a27cb0383619f802df11a1433bc792fb" }
 image-archive = { git = "https://git.halogenos.org/halogenOS/android_external_xos", rev = "c4fc5eadc4a920ccd5e2a37bd702fdfa4bcd7006" }
-image-build = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea" }
-ota-package = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea" }
-release = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea" }
-sha256 = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea" }
-sparse-image = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea" }
+image-build = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "b1dab044a27cb0383619f802df11a1433bc792fb" }
+ota-package = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "b1dab044a27cb0383619f802df11a1433bc792fb" }
+release = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "b1dab044a27cb0383619f802df11a1433bc792fb" }
+sha256 = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "b1dab044a27cb0383619f802df11a1433bc792fb" }
+sparse-image = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "b1dab044a27cb0383619f802df11a1433bc792fb" }
 stock-package = { path = "crates/stock-package" }
 transfer-retry = { path = "crates/transfer-retry" }
-update-metadata = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "89403fb1b6d0fe8903a6e00dbb5eb68e0bb708ea" }
+update-metadata = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "b1dab044a27cb0383619f802df11a1433bc792fb" }
 wasm = { path = "crates/wasm" }
+zip-records = { git = "https://git.halogenos.org/halogenOS/android_build_dist-package", rev = "b1dab044a27cb0383619f802df11a1433bc792fb" }
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
-missing_errors_doc = "allow"
-missing_panics_doc = "allow"
+as_conversions = "deny"
 undocumented_unsafe_blocks = "deny"
 let_underscore_must_use = "deny"
 allow_attributes = "deny"

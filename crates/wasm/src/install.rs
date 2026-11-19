@@ -19,6 +19,12 @@ use crate::progress::{Progress, ReleasePlan};
 use crate::release_images::{ImagesFor, StoredName, store_checked_images};
 use crate::releases::read_release_of_tag;
 
+/// Checks the phone that the page opens, stores the images of the release tagged `release_tag`,
+/// installs them and reports the progress to `page`.
+///
+/// # Errors
+///
+/// Fails with a [page failure](crate#failures) that describes the step that failed.
 #[wasm_bindgen]
 pub async fn install(page: InstallPage, release_tag: String) -> Result<(), JsValue> {
     run(&Page::new(page), &release_tag)

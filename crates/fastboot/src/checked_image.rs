@@ -83,11 +83,11 @@ impl ImageDownloads {
 
 #[cfg(test)]
 mod tests {
-    use byte_io::{MemorySource, to_index, to_len};
+    use byte_io::{MemorySource, to_len};
     use sparse_image::{BLOCK_LEN, min_split_len};
 
     use super::*;
-    use crate::test_images::{blocks_len, sparse_image};
+    use crate::test_images::{blocks_len, filled_blocks, sparse_image};
 
     fn checked(bytes: Vec<u8>) -> CheckedImage {
         CheckedImage::read(Rc::new(MemorySource::new(bytes))).unwrap()
@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn a_longer_raw_image_goes_out_as_sparse_images() {
-        let raw = checked(vec![1; to_index(blocks_len(3))]);
+        let raw = checked(filled_blocks(3, 1));
         let max_download = u32::try_from(min_split_len(BLOCK_LEN)).unwrap();
         assert_eq!(raw.plan(max_download).unwrap().bodies().len(), 3);
     }

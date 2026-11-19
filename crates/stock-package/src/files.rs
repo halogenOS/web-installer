@@ -5,7 +5,7 @@ use std::io::Write;
 use std::num::NonZeroUsize;
 use std::rc::Rc;
 
-use byte_io::{Body, ByteSource, CopyError, Scratch, SourceError, read_all, visit_pieces};
+use byte_io::{Body, ByteSource, CopyError, Scratch, SourceError, visit_pieces};
 use fs_read::ImageFiles;
 use sha256::{RunningDigest, Sha256Digest};
 
@@ -18,6 +18,12 @@ pub struct PartitionFiles {
 }
 
 impl PartitionFiles {
+    /// Opens the filesystem in `image`, the image of the partition `partition`. Files are read
+    /// through a buffer of `piece_len` bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PackageError::Filesystem`] when the filesystem of `image` cannot be read.
     pub fn open(
         partition: &str,
         image: Rc<dyn ByteSource>,
@@ -34,27 +40,14 @@ impl PartitionFiles {
         })
     }
 
-    pub(crate) fn file_with_digest(
-        &mut self,
-        path: &str,
-    ) -> Result<(Rc<dyn Body>, Sha256Digest), PackageError> {
-        let body = self.find_file(path)?;
-        let digest = Sha256Digest::of_body(&*body, &mut self.scratch)
-            .map_err(|source| self.read_failure(path, source))?;
-        Ok((body, digest))
-    }
-
-    pub(crate) fn file_bytes(
-        &mut self,
-        path: &str,
-        sha256: Sha256Digest,
-    ) -> Result<Vec<u8>, PackageError> {
-        let body = self.find_file(path)?;
-        let bytes = read_all(&*body).map_err(|source| self.read_failure(path, source))?;
-        self.check_digest(path, sha256, Sha256Digest::of(&bytes))?;
-        Ok(bytes)
-    }
-
+    /// Writes the file `path` to `sink` and returns the number of bytes written.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CopyFileError::Package`] when the function cannot search the filesystem for
+    /// `path`, finds no file `path`, cannot read the file or computes a SHA-256 other than `sha256`
+    /// for it. Returns [`CopyFileError::Sink`] when `sink` fails. On any error, `sink` may already
+    /// contain part or all of the file.
     pub fn copy_file(
         &mut self,
         path: &str,

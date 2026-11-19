@@ -189,10 +189,9 @@ async fn read_package_files<'a>(
 }
 
 fn failed_request(error: &PackageError) -> Option<&TransferFailure> {
-    iter::successors(Some(error as &(dyn Error + 'static)), |&error| {
-        error.source()
-    })
-    .find_map(|error| match error.downcast_ref::<SourceError>()? {
+    let outermost: &(dyn Error + 'static) = error;
+    let mut error_chain = iter::successors(Some(outermost), |&error| error.source());
+    error_chain.find_map(|error| match error.downcast_ref::<SourceError>()? {
         SourceError::Transfer { source, .. } => source.get_ref()?.downcast_ref(),
         _ => None,
     })

@@ -90,6 +90,14 @@ impl PublishedRelease {
     }
 }
 
+/// Lists the releases to choose from at `site`: the release tagged `linked_tag` when that release
+/// is installable, otherwise the newest release of every device.
+///
+/// # Errors
+///
+/// Fails with a [page failure](crate#failures) when the function cannot read the releases. Fails
+/// with the error that `serde_wasm_bindgen` returns when the function cannot convert the list for
+/// the page.
 #[wasm_bindgen(js_name = listReleases)]
 pub async fn list_releases(
     site: ReleaseSite,

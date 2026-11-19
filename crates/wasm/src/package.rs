@@ -4,6 +4,7 @@
 use std::collections::VecDeque;
 use std::rc::Rc;
 
+use byte_io::to_len;
 use ota_package::{OtaPackage, PackageError, PayloadChunk, PayloadImage, PayloadOperations};
 use release::{Package, Release, payload_images};
 use sha256::RunningDigest;
@@ -19,6 +20,12 @@ use crate::release_files_failure::ReleaseFilesError;
 use crate::release_images::{ImagesFor, StoredName, store_checked_images};
 use crate::releases::read_release_of_tag;
 
+/// Builds the OTA package of the release tagged `release_tag`, writes it to the file that `page`
+/// opens and reports the progress to `page`.
+///
+/// # Errors
+///
+/// Fails with a [page failure](crate#failures) that describes the step that failed.
 #[wasm_bindgen(js_name = savePackage)]
 pub async fn save_package(page: PackagePage, release_tag: String) -> Result<(), JsValue> {
     run(&Storage::new(page.clone().into()), page, &release_tag)
@@ -157,7 +164,7 @@ impl PackageOutput<'_> {
             .await
             .map_err(PackageFailure::FileWrite)?;
         self.digest.update(bytes);
-        self.written += bytes.len() as u64;
+        self.written += to_len(bytes.len());
         let total = self.package.size;
         if self.shown.advances_to(self.written, total) {
             self.storage.report(&Progress::WritingPackage {

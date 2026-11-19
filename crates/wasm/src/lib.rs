@@ -1,6 +1,19 @@
 // SPDX-FileCopyrightText: The halogenOS Project
 // SPDX-License-Identifier: GPL-3.0-only
 
+//! The entry points that the page of the web installer calls.
+//!
+//! # Failures
+//!
+//! An entry point fails with one of three values:
+//!
+//! * a page failure, an object whose `cause` describes the failure and whose `nextStep` tells the
+//!   person what to do;
+//! * a host contract violation, an `Error` named `HostContractViolation`, when the page passes a
+//!   value that the entry point cannot read;
+//! * a compression failure, an `Error` named `CompressionFailed`, when the compressor fails on a
+//!   chunk that the page sends to `compressChunk`.
+
 #![forbid(unsafe_code)]
 
 mod archive_ranges;

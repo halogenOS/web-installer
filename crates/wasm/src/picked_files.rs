@@ -3,7 +3,7 @@
 
 use std::rc::Rc;
 
-use byte_io::{ByteSource, READ_PIECE_LEN, Scratch, SourceBody, SourceError, visit_pieces};
+use byte_io::{ByteSource, READ_PIECE_LEN, Scratch, SourceBody, SourceError, to_len, visit_pieces};
 use release::StockPackage;
 use serde::Serialize;
 use sha256::{RunningDigest, Sha256Digest};
@@ -82,7 +82,10 @@ pub(crate) async fn pick_files(
             .await?
             .into_iter()
             .map(|PickedFile { name, file }| match HostSource::open(file) {
-                Ok(source) => Ok((name, Rc::new(source) as Rc<dyn ByteSource>)),
+                Ok(source) => {
+                    let source: Rc<dyn ByteSource> = Rc::new(source);
+                    Ok((name, source))
+                }
                 Err(source) => Err(ReleaseFilesError::PickedRead { name, source }),
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -147,7 +150,7 @@ impl PickedFileDigests<'_> {
             &mut Scratch::new(READ_PIECE_LEN),
             |piece| {
                 digest.update(piece);
-                self.done += piece.len() as u64;
+                self.done += to_len(piece.len());
                 if self.shown.advances_to(self.done, self.total) {
                     self.storage.report(&Progress::CheckingPickedFiles {
                         done: self.done,

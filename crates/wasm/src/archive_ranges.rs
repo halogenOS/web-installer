@@ -7,7 +7,7 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::time::Duration;
 
-use byte_io::{READ_PIECE_LEN, SourceError, clamp_len};
+use byte_io::{READ_PIECE_LEN, SourceError, clamp_len, to_len};
 use image_archive::{ArchiveError, ForwardWalk, ImageRanges, PieceLen};
 use release::PartitionName;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -215,7 +215,7 @@ fn walk_picked_part(
             .map_err(part_unreadable)?;
         let _taken_up_to_the_end_of_the_walk: usize =
             walk.borrow_mut().take(&piece).map_err(archive_failure)?;
-        at += piece.len() as u64;
+        at += to_len(piece.len());
     }
     Ok(())
 }

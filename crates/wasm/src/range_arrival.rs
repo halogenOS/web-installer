@@ -4,7 +4,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use byte_io::clamp_len;
+use byte_io::{clamp_len, to_len};
 use image_archive::{ArchiveError, ForwardWalk};
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -55,8 +55,9 @@ impl RangeArrival {
             count.failure = Some(failure);
             0
         });
-        count.taken += taken as u64;
-        count.arrival.add(taken as u64);
+        let taken_len = to_len(taken);
+        count.taken += taken_len;
+        count.arrival.add(taken_len);
         taken
     }
 }

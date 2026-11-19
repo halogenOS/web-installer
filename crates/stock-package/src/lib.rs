@@ -14,11 +14,12 @@ mod tests;
 use std::io::BufReader;
 use std::rc::Rc;
 
-use byte_io::{ByteSource, SliceSource, SourceCursor, SourceError, clamp_len};
+use byte_io::{ByteSource, SliceSource, SourceCursor, SourceError, clamp_len, to_len};
 use prost::Message;
 use update_metadata::{DeltaArchiveManifest, FULL_PAYLOAD_MINOR_VERSION, PayloadHeader};
 use zip::result::ZipError;
 use zip::{CompressionMethod, ZipArchive};
+use zip_records::LONGEST_END_RECORD_LEN;
 
 pub use error::{CopyFileError, PackageError};
 pub use files::PartitionFiles;
@@ -27,8 +28,6 @@ pub use package_files::PackageFiles;
 use crate::partition::PartitionImage;
 
 const PAYLOAD_ENTRY: &str = "payload.bin";
-
-const ZIP_END_WINDOW_LEN: usize = 22 + u16::MAX as usize;
 
 pub(crate) struct StockPackage {
     payload: Rc<dyn ByteSource>,
@@ -41,6 +40,7 @@ impl StockPackage {
     pub(crate) fn open(package: Rc<dyn ByteSource>) -> Result<Self, PackageError> {
         let payload: Rc<dyn ByteSource> = Rc::new(find_payload(package)?);
         let mut header = [0; PayloadHeader::LEN];
+        let header_len = to_len(header.len());
         payload
             .read_at(0, &mut header)
             .map_err(PackageError::Read)?;
@@ -48,8 +48,8 @@ impl StockPackage {
             manifest_len,
             metadata_signature_len,
         } = PayloadHeader::parse(&header).map_err(PackageError::Header)?;
-        let manifest_bytes = read_range(&payload, PayloadHeader::LEN as u64, manifest_len)
-            .map_err(PackageError::Read)?;
+        let manifest_bytes =
+            read_range(&payload, header_len, manifest_len).map_err(PackageError::Read)?;
         let manifest = DeltaArchiveManifest::decode(manifest_bytes.as_slice())
             .map_err(PackageError::Manifest)?;
         let minor_version = manifest.minor_version();
@@ -60,7 +60,7 @@ impl StockPackage {
         if block_size == 0 {
             return Err(PackageError::ZeroBlockSize);
         }
-        let data_start = (PayloadHeader::LEN as u64)
+        let data_start = header_len
             .saturating_add(manifest_len)
             .saturating_add(u64::from(metadata_signature_len));
         Ok(Self {
@@ -97,7 +97,10 @@ impl StockPackage {
 
 fn find_payload(package: Rc<dyn ByteSource>) -> Result<SliceSource, PackageError> {
     let with_tail = PackageWithTail::read(Rc::clone(&package)).map_err(PackageError::Read)?;
-    let input = BufReader::with_capacity(ZIP_END_WINDOW_LEN, SourceCursor::new(Rc::new(with_tail)));
+    let input = BufReader::with_capacity(
+        LONGEST_END_RECORD_LEN,
+        SourceCursor::new(Rc::new(with_tail)),
+    );
     let mut archive = ZipArchive::new(input).map_err(PackageError::Zip)?;
     let entry = archive
         .by_name_raw(PAYLOAD_ENTRY.as_bytes())
@@ -110,7 +113,9 @@ fn find_payload(package: Rc<dyn ByteSource>) -> Result<SliceSource, PackageError
     }
     let start = entry
         .data_start()
-        .expect("opening an entry reads its local header and with it the start of its data");
+        .ok_or(PackageError::Zip(ZipError::InvalidArchive(
+            "the archive gives no start of the data of payload.bin".into(),
+        )))?;
     let len = entry.size();
     drop(entry);
     SliceSource::new(package, start, len).map_err(PackageError::Read)
@@ -124,7 +129,7 @@ struct PackageWithTail {
 
 impl PackageWithTail {
     fn read(package: Rc<dyn ByteSource>) -> Result<Self, SourceError> {
-        let tail_start = package.len().saturating_sub(ZIP_END_WINDOW_LEN as u64);
+        let tail_start = package.len().saturating_sub(to_len(LONGEST_END_RECORD_LEN));
         let tail = read_range(&package, tail_start, package.len() - tail_start)?;
         Ok(Self {
             package,
@@ -145,7 +150,7 @@ impl ByteSource for PackageWithTail {
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), SourceError> {
-        self.ensure_range(offset, buf.len() as u64)?;
+        self.ensure_range(offset, to_len(buf.len()))?;
         match self.tail_from(offset) {
             Some(tail) => buf.copy_from_slice(&tail[..buf.len()]),
             None => self.package.read_at(offset, buf)?,
@@ -164,7 +169,7 @@ impl ByteSource for PackageWithTail {
 
 fn read_range(source: &Rc<dyn ByteSource>, start: u64, len: u64) -> Result<Vec<u8>, SourceError> {
     let bytes = source.read_up_to(start, len)?;
-    let delivered = bytes.len() as u64;
+    let delivered = to_len(bytes.len());
     if delivered < len {
         return Err(SourceError::BodyEndedEarly {
             declared: len,

@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: The halogenOS Project
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::collections::BTreeMap;
 use std::future::Future;
 use std::rc::Rc;
 
@@ -20,10 +19,25 @@ const NO_SNAPSHOT_UPDATE: &str = "none";
 pub trait InstallHost {
     type Link: Link;
 
+    /// The image to flash to `partition`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`SourceError`] that stops the host from providing the image.
     fn image(&self, partition: &PartitionName) -> Result<Rc<dyn ByteSource>, SourceError>;
 
+    /// The image of an empty super partition.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`SourceError`] that stops the host from providing the image.
     fn super_empty(&self) -> Result<Rc<dyn ByteSource>, SourceError>;
 
+    /// Opens a new link to the phone after the phone reboots to fastbootd.
+    ///
+    /// # Errors
+    ///
+    /// Returns a link error when the phone does not come back after the reboot.
     fn reconnect(
         &mut self,
     ) -> impl Future<Output = Result<Self::Link, <Self::Link as Link>::Error>>;
@@ -44,6 +58,15 @@ pub enum InstallProgress<'a> {
     },
 }
 
+/// Runs the steps of `release` on the phone that checked as `phone`, then reboots it.
+///
+/// # Errors
+///
+/// Returns a [`FastbootError`] when an image cannot be read or does not fit the partition it is
+/// for. The function finds this before the first step writes to the phone. Later it returns the
+/// error that stops a step: the phone refuses a command, replies unexpectedly or does not come back
+/// in fastbootd, an image cannot be sent in downloads the phone accepts, the empty super image
+/// cannot be read, or the link fails.
 pub async fn install<H: InstallHost>(
     release: &Release,
     phone: &CheckedPhone,
@@ -51,19 +74,19 @@ pub async fn install<H: InstallHost>(
     host: &mut H,
 ) -> Result<(), FastbootError<<H::Link as Link>::Error>> {
     let steps = install_steps(release);
-    let images = read_flashed_images(release, phone, &steps, host)?;
-    for (index, &step) in steps.iter().enumerate() {
+    let prepared_steps = prepare_steps(release, phone, &steps, host)?;
+    for (index, (&step, prepared)) in steps.iter().zip(prepared_steps).enumerate() {
         host.report(InstallProgress::Step {
             index,
             count: steps.len(),
             step,
         });
-        match step {
-            Step::Flash { partition, logical } => {
-                let target = flash_target(release, partition, &phone.slot);
-                let image = images
-                    .get(partition)
-                    .expect("install reads every flashed image before the first step");
+        match prepared {
+            PreparedStep::Flash {
+                target,
+                logical,
+                image,
+            } => {
                 let max_download_size = fastboot.require_size(&Variable::MaxDownloadSize).await?;
                 let downloads = image.plan(download_limit(max_download_size)).ok_or(
                     FastbootError::CannotSend {
@@ -71,7 +94,7 @@ pub async fn install<H: InstallHost>(
                         max_download: max_download_size,
                     },
                 )?;
-                if *logical {
+                if logical {
                     fastboot
                         .run(Command::ResizeLogicalPartition {
                             partition: &target,
@@ -87,7 +110,7 @@ pub async fn install<H: InstallHost>(
                 };
                 fastboot.flash(&target, &downloads, &mut on_sent).await?;
             }
-            Step::RebootFastboot => {
+            PreparedStep::RebootFastboot => {
                 fastboot.run(Command::RebootFastboot).await?;
                 let link = host.reconnect().await.map_err(FastbootError::Link)?;
                 fastboot = fastboot.reconnected(link);
@@ -96,7 +119,7 @@ pub async fn install<H: InstallHost>(
                     return Err(FastbootError::NotFastbootd { is_userspace });
                 }
             }
-            Step::UpdateSuper { super_device, .. } => {
+            PreparedStep::UpdateSuper { super_device } => {
                 if let Ok(status) = fastboot
                     .read_variable(&Variable::SnapshotUpdateStatus)
                     .await?
@@ -110,41 +133,62 @@ pub async fn install<H: InstallHost>(
                     .run(Command::UpdateSuper(super_device.as_str()))
                     .await?;
             }
-            Step::Erase { .. } => {}
+            PreparedStep::Erase => {}
         }
     }
     fastboot.run(Command::Reboot).await
 }
 
-/// Reads every image that the install flashes before the first step writes to the phone, so
-/// that a broken image or one larger than its partition stops the install with the phone as it
-/// was.
-fn read_flashed_images<H: InstallHost>(
+/// A step of the install, with the image that a flash step writes already read and checked.
+enum PreparedStep<'a> {
+    Flash {
+        target: String,
+        logical: bool,
+        image: CheckedImage,
+    },
+    RebootFastboot,
+    UpdateSuper {
+        super_device: &'a PartitionName,
+    },
+    Erase,
+}
+
+/// Reads and checks every image that the install flashes before the first step writes to the
+/// phone, so that a broken image or one larger than its partition stops the install with the phone
+/// as it was.
+fn prepare_steps<'a, H: InstallHost>(
     release: &Release,
     phone: &CheckedPhone,
-    steps: &[&Step],
+    steps: &[&'a Step],
     host: &H,
-) -> Result<BTreeMap<PartitionName, CheckedImage>, FastbootError<<H::Link as Link>::Error>> {
+) -> Result<Vec<PreparedStep<'a>>, FastbootError<<H::Link as Link>::Error>> {
     steps
         .iter()
-        .filter_map(|step| match step {
-            Step::Flash { partition, .. } => Some(partition),
-            Step::RebootFastboot | Step::UpdateSuper { .. } | Step::Erase { .. } => None,
-        })
-        .map(|partition| {
-            let image = host.image(partition).map_err(FastbootError::Read)?;
-            let image = CheckedImage::read(image).map_err(|error| match error {
-                SparseImageError::ReadStart(source) => FastbootError::Read(source),
-                source => FastbootError::SparseImage {
-                    partition: partition.clone(),
-                    source,
-                },
-            })?;
-            let target = flash_target(release, partition, &phone.slot);
-            if let Some(unfit) = phone.partition_sizes.unfit(&target, image.partition_len()) {
-                return Err(FastbootError::PartitionUnfit(unfit));
+        .map(|&step| match step {
+            Step::Flash { partition, logical } => {
+                let image = host.image(partition).map_err(FastbootError::Read)?;
+                let image = CheckedImage::read(image).map_err(|error| match error {
+                    SparseImageError::ReadStart(source) => FastbootError::Read(source),
+                    source => FastbootError::SparseImage {
+                        partition: partition.clone(),
+                        source,
+                    },
+                })?;
+                let target = flash_target(release, partition, &phone.slot);
+                if let Some(unfit) = phone.partition_sizes.unfit(&target, image.partition_len()) {
+                    return Err(FastbootError::PartitionUnfit(unfit));
+                }
+                Ok(PreparedStep::Flash {
+                    target,
+                    logical: *logical,
+                    image,
+                })
             }
-            Ok((partition.clone(), image))
+            Step::RebootFastboot => Ok(PreparedStep::RebootFastboot),
+            Step::UpdateSuper { super_device, .. } => {
+                Ok(PreparedStep::UpdateSuper { super_device })
+            }
+            Step::Erase { .. } => Ok(PreparedStep::Erase),
         })
         .collect()
 }
@@ -152,7 +196,7 @@ fn read_flashed_images<H: InstallHost>(
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
-    use std::collections::VecDeque;
+    use std::collections::{BTreeMap, VecDeque};
     use std::convert::Infallible;
     use std::pin::pin;
     use std::task::{Context, Poll, Waker};

@@ -5,7 +5,7 @@ use std::cell::Cell;
 use std::io::{Cursor, Write};
 use std::rc::Rc;
 
-use byte_io::{ByteSource, MemorySource, SourceError};
+use byte_io::{ByteSource, MemorySource, SourceError, to_len};
 use fs_read::testing::erofs_compressed::{
     self, CompressedImage, FILE_NAME, Head, IndexKind, Stored,
 };
@@ -19,6 +19,7 @@ use update_metadata::{
 use zip::CompressionMethod;
 use zip::write::{SimpleFileOptions, ZipWriter};
 
+use crate::partition::PartitionImage;
 use crate::{CopyFileError, PAYLOAD_ENTRY, PackageError, PackageFiles};
 
 const BLOCK: usize = 4096;
@@ -33,10 +34,10 @@ fn library_content() -> Vec<u8> {
 
 fn erofs_image() -> Vec<u8> {
     let content = library_content();
-    let mut image = CompressedImage::new(content.len() as u64, IndexKind::Full);
+    let mut image = CompressedImage::new(to_len(content.len()), IndexKind::Full);
     for (n, block) in content.chunks(BLOCK).enumerate() {
         image.extents.push(erofs_compressed::Extent {
-            start: (n * BLOCK) as u64,
+            start: to_len(n * BLOCK),
             head: Head::Plain,
             stored: n,
         });
@@ -54,10 +55,10 @@ fn payload(image: &[u8]) -> Vec<u8> {
         .map(|(block, bytes)| {
             let operation = InstallOperation {
                 r#type: Type::Replace.into(),
-                data_offset: Some(data.len() as u64),
-                data_length: Some(bytes.len() as u64),
+                data_offset: Some(to_len(data.len())),
+                data_length: Some(to_len(bytes.len())),
                 dst_extents: vec![Extent {
-                    start_block: Some(block as u64),
+                    start_block: Some(u64::try_from(block).unwrap()),
                     num_blocks: Some(1),
                 }],
                 data_sha256_hash: Some(Sha256Digest::of(bytes).as_bytes().to_vec()),
@@ -67,12 +68,12 @@ fn payload(image: &[u8]) -> Vec<u8> {
         })
         .collect();
     let manifest = DeltaArchiveManifest {
-        block_size: Some(4096),
+        block_size: Some(u32::try_from(BLOCK).unwrap()),
         minor_version: Some(FULL_PAYLOAD_MINOR_VERSION),
         partitions: vec![PartitionUpdate {
             partition_name: "system".to_owned(),
             new_partition_info: Some(PartitionInfo {
-                size: Some(image.len() as u64),
+                size: Some(to_len(image.len())),
                 ..PartitionInfo::default()
             }),
             operations,
@@ -82,7 +83,7 @@ fn payload(image: &[u8]) -> Vec<u8> {
     }
     .encode_to_vec();
     let mut payload = PayloadHeader {
-        manifest_len: manifest.len() as u64,
+        manifest_len: to_len(manifest.len()),
         metadata_signature_len: u32::try_from(SIGNATURE.len()).unwrap(),
     }
     .to_bytes()
@@ -128,20 +129,25 @@ fn opening_reads_the_tail_of_the_zip_archive_once() {
         package: MemorySource::new(package()),
         reads: Cell::new(0),
     });
-    let _opened = PackageFiles::open(Rc::clone(&package) as Rc<dyn ByteSource>).unwrap();
+    // Inside the call, `Rc::clone` would take `Rc<dyn ByteSource>` as its type and expect a
+    // reference to one, so the second handle is bound first and coerced at the call.
+    let package_source = Rc::clone(&package);
+    let _opened = PackageFiles::open(package_source).unwrap();
     assert_eq!(package.reads.get(), 3);
 }
 
 #[test]
-fn a_file_of_a_partition_is_read_from_the_package() {
+fn a_file_of_a_partition_is_copied_from_the_package() {
     let mut package = PackageFiles::open(Rc::new(MemorySource::new(package()))).unwrap();
     let content = library_content();
+    let mut copied = Vec::new();
 
-    let read = package
-        .file_bytes("system", FILE_NAME, Sha256Digest::of(&content))
+    let copied_len = package
+        .copy_file("system", FILE_NAME, Sha256Digest::of(&content), &mut copied)
         .unwrap();
 
-    assert_eq!(read, content);
+    assert_eq!(copied, content);
+    assert_eq!(copied_len, to_len(content.len()));
 }
 
 #[test]
@@ -159,4 +165,51 @@ fn a_copied_file_whose_digest_differs_fails() {
         copied,
         Err(CopyFileError::Package(error)) if matches!(*error, PackageError::FileMismatch { .. })
     ));
+}
+
+fn partition_of_one_block(data: &[u8]) -> PartitionImage {
+    let update = PartitionUpdate {
+        partition_name: "system".to_owned(),
+        new_partition_info: Some(PartitionInfo {
+            size: Some(to_len(BLOCK)),
+            ..PartitionInfo::default()
+        }),
+        operations: vec![InstallOperation {
+            r#type: Type::Replace.into(),
+            data_offset: Some(0),
+            data_length: Some(to_len(data.len())),
+            dst_extents: vec![Extent {
+                start_block: Some(0),
+                num_blocks: Some(1),
+            }],
+            data_sha256_hash: Some(Sha256Digest::of(data).as_bytes().to_vec()),
+        }],
+        ..PartitionUpdate::default()
+    };
+    let payload = Rc::new(MemorySource::new(data.to_vec()));
+    PartitionImage::new(payload, 0, to_len(BLOCK), &update).unwrap()
+}
+
+#[test]
+fn a_block_that_its_operation_fills_in_part_ends_in_zeros() {
+    let data = [7; 100];
+    let mut block = [1; BLOCK];
+
+    partition_of_one_block(&data)
+        .read_at(0, &mut block)
+        .unwrap();
+
+    assert_eq!(block[..data.len()], data);
+    assert!(block[data.len()..].iter().all(|&byte| byte == 0));
+}
+
+#[test]
+fn a_read_past_the_data_of_an_operation_gives_zeros() {
+    let mut tail = [1; 50];
+
+    partition_of_one_block(&[7; 100])
+        .read_at(200, &mut tail)
+        .unwrap();
+
+    assert_eq!(tail, [0; 50]);
 }

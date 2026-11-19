@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use byte_io::to_len;
 use sha256::{RunningDigest, Sha256Digest};
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -23,7 +24,7 @@ impl FileDigest {
 
     pub fn update(&self, piece: &[u8]) {
         self.digest.borrow_mut().update(piece);
-        self.arrival.add(piece.len() as u64);
+        self.arrival.add(to_len(piece.len()));
     }
 }
 
@@ -53,7 +54,7 @@ mod tests {
     use crate::arrived_bytes::ArrivedBytes;
 
     fn digest_of_file(len: usize) -> FileDigest {
-        let len = len as u64;
+        let len = to_len(len);
         FileDigest::new(ArrivedBytes::start(0, len, |_| {}).file(len))
     }
 

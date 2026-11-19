@@ -13,6 +13,8 @@ use crate::retry::TransferFailure;
 
 const CONTRACT_VIOLATION: &str = "HostContractViolation";
 
+const COMPRESSION_FAILED: &str = "CompressionFailed";
+
 const UNNAMED_FAILURE: &str = "Error";
 
 const QUOTA_EXCEEDED: &str = "QuotaExceededError";
@@ -26,6 +28,10 @@ pub(crate) struct HostFailure {
 impl HostFailure {
     pub(crate) fn contract_violation(message: impl Into<String>) -> Self {
         Self::of_parts(Some(CONTRACT_VIOLATION.to_owned()), Some(message.into()))
+    }
+
+    pub(crate) fn compression_failed(message: impl Into<String>) -> Self {
+        Self::of_parts(Some(COMPRESSION_FAILED.to_owned()), Some(message.into()))
     }
 
     pub(crate) fn of_exception(thrown: &JsValue) -> Self {
